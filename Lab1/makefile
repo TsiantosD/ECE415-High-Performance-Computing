@@ -5,7 +5,7 @@
 EXECUTABLES	= sobel_orig
 
 #This is the compiler to use
-CC = icc
+CC = icx
 
 #These are the flags passed to the compiler. Change accordingly
 CFLAGS = -Wall -O0
