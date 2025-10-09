@@ -2,13 +2,13 @@
 # ARE NOT EQUIVALENT to tabs. The line after a rule starts with a tab!
 
 #Add any executable you want to be created here.
-EXECUTABLES	= sobel_orig
+EXECUTABLES	= sobel_orig sobel_loop_interchange sobel_loop_unrolling
 
 #This is the compiler to use
 CC = icx
 
 #These are the flags passed to the compiler. Change accordingly
-CFLAGS = -Wall -O0
+CFLAGS = -Wall -O0 -g
 
 #These are the flags passed to the linker. Nothing in our case
 LDFLAGS = -lm

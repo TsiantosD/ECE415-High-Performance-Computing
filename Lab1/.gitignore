@@ -1,2 +1,3 @@
-sobel_orig
+sobel_*
+!sobel_*.c
 output_*
