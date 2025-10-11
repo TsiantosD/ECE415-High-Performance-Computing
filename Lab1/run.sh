@@ -1,12 +1,54 @@
 #!/bin/bash
 
 CPU_CORE=2
-
 PROJECT_DIR=$(pwd)
 GOLDEN_FILE="$PROJECT_DIR/src/golden.grey"
 OUTPUT_FILE="$PROJECT_DIR/src/output_sobel.grey"
 
 set -e
+
+# --- Parse arguments ---
+EXEC_METHOD=""
+EXECUTABLE=""
+RUN_TIMES=1
+
+print_help() {
+    echo "Usage: $0 [options]"
+    echo
+    echo "Options:"
+    echo "  --help                        Show this help message"
+    echo "  --execution-method=<method>   Choose execution method"
+    echo "                                Options: normal, hotspots, performance-snapshot, uarch-exploration, memory-access, all"
+    echo "  --executable=<name>           Choose executable (e.g. 1_sobel_orig or all)"
+    echo "  --times=<N>                   Run each executable N times (default: 1)"
+    echo
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --help)
+            print_help
+            ;;
+        --execution-method=*)
+            EXEC_METHOD="${1#*=}"
+            shift
+            ;;
+        --executable=*)
+            EXECUTABLE="${1#*=}"
+            shift
+            ;;
+        --times=*)
+            RUN_TIMES="${1#*=}"
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage."
+            exit 1
+            ;;
+    esac
+done
 
 # --- Build ---
 cd ./src || { echo "src folder not found!"; exit 1; }
@@ -29,44 +71,83 @@ METHODS=("normal" "hotspots" "performance-snapshot" "uarch-exploration" "memory-
 METHOD_FLAGS=("" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access")
 METHOD_NAMES=("Normal run" "VTune - Hotspots" "VTune - Performance Snapshot" "VTune - Microarchitecture Exploration" "VTune - Memory Access")
 
-echo
-echo "Select execution method:"
-for i in "${!METHODS[@]}"; do
-    echo "[$((i+1))] ${METHOD_NAMES[$i]}"
-done
-echo "[a] Run all methods"
-
-read -rp "Enter choice (1-${#METHODS[@]} or 'a' for all): " exec_mode
-echo
-
-if [[ "$exec_mode" == "a" ]]; then
-    selected_indices=("${!METHODS[@]}")  # All methods
-elif [[ "$exec_mode" =~ ^[0-9]+$ ]] && (( exec_mode >= 1 && exec_mode <= ${#METHODS[@]} )); then
-    selected_indices=($((exec_mode-1)))
+# --- Determine selected methods ---
+if [[ -n "$EXEC_METHOD" ]]; then
+    if [[ "$EXEC_METHOD" == "all" ]]; then
+        selected_indices=("${!METHODS[@]}")
+    else
+        found=false
+        for i in "${!METHODS[@]}"; do
+            if [[ "${METHODS[$i]}" == "$EXEC_METHOD" ]]; then
+                selected_indices=($i)
+                found=true
+                break
+            fi
+        done
+        if [[ "$found" == false ]]; then
+            echo "Invalid method: $EXEC_METHOD"
+            echo "Valid methods: ${METHODS[*]} or 'all'"
+            exit 1
+        fi
+    fi
 else
-    echo "Invalid choice!"
-    exit 1
+    echo
+    echo "Select execution method:"
+    for i in "${!METHODS[@]}"; do
+        echo "[$((i+1))] ${METHOD_NAMES[$i]}"
+    done
+    echo "[a] Run all methods"
+    read -rp "Enter choice (1-${#METHODS[@]} or 'a' for all): " exec_mode
+    echo
+
+    if [[ "$exec_mode" == "a" ]]; then
+        selected_indices=("${!METHODS[@]}")
+    elif [[ "$exec_mode" =~ ^[0-9]+$ ]] && (( exec_mode >= 1 && exec_mode <= ${#METHODS[@]} )); then
+        selected_indices=($((exec_mode-1)))
+    else
+        echo "Invalid choice!"
+        exit 1
+    fi
 fi
 
-# --- Choose executable ---
-echo "Available executables:"
-i=1
-for exe in "${EXES[@]}"; do
-    echo "[$i] ${exe#./}"
-    i=$((i+1))
-done
-echo "[a] Run all"
-
-read -rp "Select executable to run (1-${#EXES[@]} or 'a' for all): " choice
-echo
-
-if [[ "$choice" == "a" ]]; then
-    selected_exes=("${EXES[@]}")
-elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#EXES[@]} )); then
-    selected_exes=("${EXES[$((choice-1))]}")
+# --- Determine selected executables ---
+if [[ -n "$EXECUTABLE" ]]; then
+    if [[ "$EXECUTABLE" == "all" ]]; then
+        selected_exes=("${EXES[@]}")
+    else
+        match_found=false
+        for exe in "${EXES[@]}"; do
+            if [[ "${exe#./}" == "$EXECUTABLE" ]]; then
+                selected_exes=("$exe")
+                match_found=true
+                break
+            fi
+        done
+        if [[ "$match_found" == false ]]; then
+            echo "Executable not found: $EXECUTABLE"
+            echo "Available: ${EXES[*]}"
+            exit 1
+        fi
+    fi
 else
-    echo "Invalid choice!"
-    exit 1
+    echo "Available executables:"
+    i=1
+    for exe in "${EXES[@]}"; do
+        echo "[$i] ${exe#./}"
+        i=$((i+1))
+    done
+    echo "[a] Run all"
+    read -rp "Select executable to run (1-${#EXES[@]} or 'a' for all): " choice
+    echo
+
+    if [[ "$choice" == "a" ]]; then
+        selected_exes=("${EXES[@]}")
+    elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#EXES[@]} )); then
+        selected_exes=("${EXES[$((choice-1))]}")
+    else
+        echo "Invalid choice!"
+        exit 1
+    fi
 fi
 
 # --- Function to run executable and diff ---
@@ -76,25 +157,24 @@ run_and_diff() {
     local metrics_dir="../metrics/${method}/${timestamp}_${exe_name}"
     mkdir -p "$metrics_dir"
 
-    # Output log file
-    local log_file="$metrics_dir/${exe_name}_output.log"
+    for ((run=1; run<=RUN_TIMES; run++)); do
+        local log_file="$metrics_dir/${exe_name}_run${run}.log"
+        echo "> [${run}/${RUN_TIMES}] Running $exe_name with method: $method ..."
 
-    echo "> Running $exe_name with method: $method ..."
+        if [ "$method" = "normal" ]; then
+            taskset -c "$CPU_CORE" "./$exe_name" > "$log_file" 2>&1
+        else
+            taskset -c $CPU_CORE vtune -collect "$method_flag" -result-dir "$metrics_dir/run_${run}" -- "./$exe_name" > "$log_file" 2>&1
+        fi
 
-    if [ "$method" = "normal" ]; then
-        taskset -c "$CPU_CORE" "./$exe_name" > "$log_file" 2>&1
-    else
-        taskset -c $CPU_CORE vtune -collect "$method_flag" -result-dir "$metrics_dir" -- "./$exe_name" > "$log_file" 2>&1
-    fi
-
-    echo "> Comparing output.grey with golden.grey ..."
-    if ! diff "$GOLDEN_FILE" "$OUTPUT_FILE" > /dev/null; then
-        echo "⚠️ Difference found for $exe_name ($method)!"
-    else
-        echo "✅ Output matches golden file for $exe_name ($method)."
-    fi
-    echo "-------------------------------------"
-    echo
+        echo "> Comparing output.grey with golden.grey ..."
+        if ! diff "$GOLDEN_FILE" "$OUTPUT_FILE" > /dev/null; then
+            echo "⚠️  Difference found for $exe_name ($method, run $run)!"
+        else
+            echo "✅ Output matches golden file for $exe_name ($method, run $run)."
+        fi
+        echo
+    done
 }
 
 # --- Run all combinations ---
