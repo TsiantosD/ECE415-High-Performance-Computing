@@ -26,13 +26,19 @@ for root, dirs, files in os.walk(BASE_DIR):
                     time = float(match.group(1))
                     runtimes.setdefault(exe_name, []).append(time)
 
-# Compute stats
-print(f"{'Executable':30} {'Average (s)':>15} {'Std Dev (s)':>15}")
-print("-" * 60)
+# --- Markdown table ---
+exe_col_width = 30
+runs_col_width = 6
+avg_col_width = 12
+stdev_col_width = 12
 
-for exe_name, times in sorted(runtimes.items()):
+# Header
+print(f"| {'Executable':<{exe_col_width}} | {'#Runs':>{runs_col_width}} | {'Average (s)':>{avg_col_width}} | {'Std Dev (s)':>{stdev_col_width}} |")
+print(f"| {'-'*exe_col_width} | {'-'*runs_col_width} | {'-'*avg_col_width} | {'-'*stdev_col_width} |")
+
+# Rows
+for exe_name, times in sorted(runtimes.items(), key=lambda x: int(x[0].split("_")[0])):
+    n = len(times)
     avg = statistics.mean(times)
-    stdev = statistics.stdev(times) if len(times) > 1 else 0.0
-    print(f"{exe_name:30} {avg:15.5f} {stdev:15.5f}")
-
-print("\nProcessed", sum(len(v) for v in runtimes.values()), "runs.")
+    stdev = statistics.stdev(times) if n > 1 else 0.0
+    print(f"| {exe_name:<{exe_col_width}} | {n:>{runs_col_width}} | {avg:>{avg_col_width}.5f} | {stdev:>{stdev_col_width}.5f} |")

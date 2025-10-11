@@ -122,24 +122,32 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 				pow(convolution2D(i, j, input, vert_operator), 2);
 			res = (int)sqrt(p);
 			output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+			t = pow((output[i*SIZE+j  ] - golden[i*SIZE+j  ]),2);
+			PSNR += t;
 
 			// pixel (i, j+1)
 			p = pow(convolution2D(i, j+1, input, horiz_operator), 2) +
 				pow(convolution2D(i, j+1, input, vert_operator), 2);
 			res = (int)sqrt(p);
 			output[i*SIZE + j+1] = (res > 255) ? 255 : (unsigned char)res;
+			t = pow((output[i*SIZE+j+1] - golden[i*SIZE+j+1]),2);
+			PSNR += t;
 
 			// pixel (i, j+2)
 			p = pow(convolution2D(i, j+2, input, horiz_operator), 2) +
 				pow(convolution2D(i, j+2, input, vert_operator), 2);
 			res = (int)sqrt(p);
 			output[i*SIZE + j+2] = (res > 255) ? 255 : (unsigned char)res;
+			t = pow((output[i*SIZE+j+2] - golden[i*SIZE+j+2]),2);
+			PSNR += t;
 
 			// pixel (i, j+3)
 			p = pow(convolution2D(i, j+3, input, horiz_operator), 2) +
 				pow(convolution2D(i, j+3, input, vert_operator), 2);
 			res = (int)sqrt(p);
 			output[i*SIZE + j+3] = (res > 255) ? 255 : (unsigned char)res;
+			t = pow((output[i*SIZE+j+3] - golden[i*SIZE+j+3]),2);
+			PSNR += t;
 		}
 
 		/* handle leftover columns */
@@ -150,6 +158,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 					pow(convolution2D(i, j, input, vert_operator), 2);
 				res = (int)sqrt(p);
 				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				PSNR += pow((output[i*SIZE + SIZE-4] - golden[i*SIZE + SIZE-4]), 2);
 				j++;
 
 			case 2:
@@ -157,6 +166,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 					pow(convolution2D(i, j, input, vert_operator), 2);
 				res = (int)sqrt(p);
 				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				PSNR += pow((output[i*SIZE + SIZE-3] - golden[i*SIZE + SIZE-3]), 2);
 				j++;
 
 			case 1:
@@ -164,37 +174,12 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 					pow(convolution2D(i, j, input, vert_operator), 2);
 				res = (int)sqrt(p);
 				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				PSNR += pow((output[i*SIZE + SIZE-2] - golden[i*SIZE + SIZE-2]), 2);
 
 			default:
 				break;
 		}
 	}
-
-	/* Now run through the output and the golden output to calculate *
-	 * the MSE and then the PSNR.									 */
-	for (i=1; i<SIZE-1; i++) {
-		for ( j=1; j<SIZE - 1 - remainder; j+=4) {
-			t = pow((output[i*SIZE+j  ] - golden[i*SIZE+j  ]),2);
-			PSNR += t;
-
-			t = pow((output[i*SIZE+j+1] - golden[i*SIZE+j+1]),2);
-			PSNR += t;
-
-			t = pow((output[i*SIZE+j+2] - golden[i*SIZE+j+2]),2);
-			PSNR += t;
-
-			t = pow((output[i*SIZE+j+3] - golden[i*SIZE+j+3]),2);
-			PSNR += t;
-		}
-	}
-
-	/* handle leftover columns */
-    switch (remainder) {
-        case 3: PSNR += pow((output[i*SIZE + SIZE-4] - golden[i*SIZE + SIZE-4]), 2);
-        case 2: PSNR += pow((output[i*SIZE + SIZE-3] - golden[i*SIZE + SIZE-3]), 2);
-        case 1: PSNR += pow((output[i*SIZE + SIZE-2] - golden[i*SIZE + SIZE-2]), 2);
-        default: break;
-    }
   
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);

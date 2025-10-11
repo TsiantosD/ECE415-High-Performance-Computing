@@ -21,7 +21,7 @@ char vert_operator[3][3] = {{1, 2, 1},
                             {-1, -2, -1}};
 
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden);
-int convolution2D(int posy, int posx, const unsigned char *input, char operator[][3]);
+// int convolution2D(int posy, int posx, const unsigned char *input, char operator[][3]);
 
 /* The arrays holding the input image, the output image and the output used *
  * as golden standard. The luminosity (intensity) of each pixel in the      *
@@ -37,25 +37,16 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
  * operator the operator we apply (horizontal or vertical). The function ret. *
  * value is the convolution of the operator with the neighboring pixels of the*
  * pixel we process.														  */
-int convolution2D(int posy, int posx, const unsigned char *input, char operator[][3]) {
-	int res;
-  
-	res = 0;
-
-	res += input[(posy - 1) * SIZE + posx - 1] * operator[0][0];
-	res += input[(posy - 1) * SIZE + posx    ] * operator[0][1];
-	res += input[(posy - 1) * SIZE + posx + 1] * operator[0][2];
-
-	res += input[(posy    ) * SIZE + posx - 1] * operator[1][0];
-	res += input[(posy    ) * SIZE + posx    ] * operator[1][1];
-	res += input[(posy    ) * SIZE + posx + 1] * operator[1][2];
-
-	res += input[(posy + 1) * SIZE + posx - 1] * operator[2][0];
-	res += input[(posy + 1) * SIZE + posx    ] * operator[2][1];
-	res += input[(posy + 1) * SIZE + posx + 1] * operator[2][2];
-
-	return(res);
-}
+#define CONVOLUTION2D(posy, posx, input, operator) ( \
+    ((input)[((posy) - 1) * SIZE + ((posx) - 1)] * (operator)[0][0] + \
+     (input)[((posy) - 1) * SIZE + ((posx)    )] * (operator)[0][1] + \
+     (input)[((posy) - 1) * SIZE + ((posx) + 1)] * (operator)[0][2] + \
+     (input)[((posy)    ) * SIZE + ((posx) - 1)] * (operator)[1][0] + \
+     (input)[((posy)    ) * SIZE + ((posx)    )] * (operator)[1][1] + \
+     (input)[((posy)    ) * SIZE + ((posx) + 1)] * (operator)[1][2] + \
+     (input)[((posy) + 1) * SIZE + ((posx) - 1)] * (operator)[2][0] + \
+     (input)[((posy) + 1) * SIZE + ((posx)    )] * (operator)[2][1] + \
+     (input)[((posy) + 1) * SIZE + ((posx) + 1)] * (operator)[2][2] ) )
 
 
 /* The main computational function of the program. The input, output and *
@@ -66,7 +57,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0, t;
 	int i, j;
-	unsigned int p;
+	unsigned int pixel_horizontal, pixel_vertical;
 	int res;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
@@ -118,83 +109,71 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	for (i = 1; i < SIZE - 1; i++) {
 		for (j = 1; j < SIZE - 1 - remainder; j += unroll_factor) {
 			// pixel (i, j)
-			p = pow(convolution2D(i, j, input, horiz_operator), 2) +
-				pow(convolution2D(i, j, input, vert_operator), 2);
-			res = (int)sqrt(p);
+			pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
+			pixel_vertical = CONVOLUTION2D(i, j, input, vert_operator);
+			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
 			output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+			t = (output[i*SIZE+j  ] - golden[i*SIZE+j  ]);
+			PSNR += t * t;
 
 			// pixel (i, j+1)
-			p = pow(convolution2D(i, j+1, input, horiz_operator), 2) +
-				pow(convolution2D(i, j+1, input, vert_operator), 2);
-			res = (int)sqrt(p);
+			pixel_horizontal = CONVOLUTION2D(i, j+1, input, horiz_operator);
+			pixel_vertical   = CONVOLUTION2D(i, j+1, input, vert_operator);
+			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
 			output[i*SIZE + j+1] = (res > 255) ? 255 : (unsigned char)res;
+			t = (output[i*SIZE+j+1] - golden[i*SIZE+j+1]);
+			PSNR += t * t;
 
 			// pixel (i, j+2)
-			p = pow(convolution2D(i, j+2, input, horiz_operator), 2) +
-				pow(convolution2D(i, j+2, input, vert_operator), 2);
-			res = (int)sqrt(p);
+			pixel_horizontal = CONVOLUTION2D(i, j+2, input, horiz_operator);
+			pixel_vertical   = CONVOLUTION2D(i, j+2, input, vert_operator);
+			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
 			output[i*SIZE + j+2] = (res > 255) ? 255 : (unsigned char)res;
+			t = (output[i*SIZE+j+2] - golden[i*SIZE+j+2]);
+			PSNR += t * t;
 
 			// pixel (i, j+3)
-			p = pow(convolution2D(i, j+3, input, horiz_operator), 2) +
-				pow(convolution2D(i, j+3, input, vert_operator), 2);
-			res = (int)sqrt(p);
+			pixel_horizontal = CONVOLUTION2D(i, j+3, input, horiz_operator);
+			pixel_vertical   = CONVOLUTION2D(i, j+3, input, vert_operator);
+			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
 			output[i*SIZE + j+3] = (res > 255) ? 255 : (unsigned char)res;
+			t = (output[i*SIZE+j+3] - golden[i*SIZE+j+3]);
+			PSNR += t * t;
 		}
 
 		/* handle leftover columns */
 		switch (remainder) {
 			case 3:
-				j = SIZE - 1 - 3;
-				p = pow(convolution2D(i, j, input, horiz_operator), 2) +
-					pow(convolution2D(i, j, input, vert_operator), 2);
-				res = (int)sqrt(p);
+				j = SIZE - 4;
+				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
+				pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
+				res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
 				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				t = output[i*SIZE + SIZE-4] - golden[i*SIZE + SIZE-4];
+				PSNR += t * t;
 				j++;
 
 			case 2:
-				p = pow(convolution2D(i, j, input, horiz_operator), 2) +
-					pow(convolution2D(i, j, input, vert_operator), 2);
-				res = (int)sqrt(p);
+				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
+            	pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
+				res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
 				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				t = output[i*SIZE + SIZE-3] - golden[i*SIZE + SIZE-3];
+				PSNR += t * t;
 				j++;
 
 			case 1:
-				p = pow(convolution2D(i, j, input, horiz_operator), 2) +
-					pow(convolution2D(i, j, input, vert_operator), 2);
-				res = (int)sqrt(p);
+				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
+            	pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
+            	res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
 				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				t = output[i*SIZE + SIZE-2] - golden[i*SIZE + SIZE-2];
+				PSNR += t * t;
 
 			default:
 				break;
 		}
 	}
-
-	/* Now run through the output and the golden output to calculate *
-	 * the MSE and then the PSNR.									 */
-	for (i=1; i<SIZE-1; i++) {
-		for ( j=1; j<SIZE - 1 - remainder; j+=4) {
-			t = pow((output[i*SIZE+j  ] - golden[i*SIZE+j  ]),2);
-			PSNR += t;
-
-			t = pow((output[i*SIZE+j+1] - golden[i*SIZE+j+1]),2);
-			PSNR += t;
-
-			t = pow((output[i*SIZE+j+2] - golden[i*SIZE+j+2]),2);
-			PSNR += t;
-
-			t = pow((output[i*SIZE+j+3] - golden[i*SIZE+j+3]),2);
-			PSNR += t;
-		}
-	}
-
-	/* handle leftover columns */
-    switch (remainder) {
-        case 3: PSNR += pow((output[i*SIZE + SIZE-4] - golden[i*SIZE + SIZE-4]), 2);
-        case 2: PSNR += pow((output[i*SIZE + SIZE-3] - golden[i*SIZE + SIZE-3]), 2);
-        case 1: PSNR += pow((output[i*SIZE + SIZE-2] - golden[i*SIZE + SIZE-2]), 2);
-        default: break;
-    }
   
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);
