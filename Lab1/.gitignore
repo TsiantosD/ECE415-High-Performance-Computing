@@ -1,4 +1,4 @@
-sobel_*
-!sobel_*.c
+*_sobel_*
+!*_sobel_*.c
 output_*
 *.jpg

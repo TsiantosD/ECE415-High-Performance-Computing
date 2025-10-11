@@ -10,16 +10,14 @@ set -e
 
 # --- Build ---
 cd ./src || { echo "src folder not found!"; exit 1; }
-echo "==> Running make in ./src ..."
+echo "> Running make in ./src ..."
 make || { echo "Make failed!"; exit 1; }
 
 # --- Find executables ---
-echo
-echo "==> Listing available executables..."
 EXES=()
 while IFS= read -r exe; do
     EXES+=("$exe")
-done < <(find . -maxdepth 1 -type f -executable -name "sobel_*" ! -name "*.c" | sort)
+done < <(find . -maxdepth 1 -type f -executable -name "*_sobel_*" ! -name "*.c" | sort)
 
 if [ ${#EXES[@]} -eq 0 ]; then
     echo "No executables found!"
@@ -73,29 +71,30 @@ fi
 
 # --- Function to run executable and diff ---
 run_and_diff() {
-    local exe="$1"
-    local method="$2"
-    local method_flag="$3"
-
     local exe_name="${exe#./}"
     local timestamp=$(date +"%Y%m%d_%H%M%S")
     local metrics_dir="../metrics/${method}/${timestamp}_${exe_name}"
     mkdir -p "$metrics_dir"
 
-    echo "==> Running $exe_name with method: $method ..."
+    # Output log file
+    local log_file="$metrics_dir/${exe_name}_output.log"
+
+    echo "> Running $exe_name with method: $method ..."
+
     if [ "$method" = "normal" ]; then
-        "./$exe_name"
+        taskset -c "$CPU_CORE" "./$exe_name" > "$log_file" 2>&1
     else
-        taskset -c $CPU_CORE vtune -collect "$method_flag" -result-dir "$metrics_dir" -- "./$exe_name"
+        taskset -c $CPU_CORE vtune -collect "$method_flag" -result-dir "$metrics_dir" -- "./$exe_name" > "$log_file" 2>&1
     fi
 
-    echo "==> Comparing output.grey with golden.grey ..."
+    echo "> Comparing output.grey with golden.grey ..."
     if ! diff "$GOLDEN_FILE" "$OUTPUT_FILE" > /dev/null; then
         echo "⚠️ Difference found for $exe_name ($method)!"
     else
         echo "✅ Output matches golden file for $exe_name ($method)."
     fi
     echo "-------------------------------------"
+    echo
 }
 
 # --- Run all combinations ---
