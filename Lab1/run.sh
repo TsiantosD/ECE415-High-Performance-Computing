@@ -4,6 +4,7 @@ CPU_CORE=2
 PROJECT_DIR=$(pwd)
 GOLDEN_FILE="$PROJECT_DIR/src/golden.grey"
 OUTPUT_FILE="$PROJECT_DIR/src/output_sobel.grey"
+AVERAGE_SCRIPT="$PROJECT_DIR/average.py"
 
 set -e
 
@@ -11,16 +12,19 @@ set -e
 EXEC_METHOD=""
 EXECUTABLE=""
 RUN_TIMES=1
+CALCULATE_AVERAGE=false
 
 print_help() {
     echo "Usage: $0 [options]"
     echo
     echo "Options:"
-    echo "  --help                        Show this help message"
-    echo "  --execution-method=<method>   Choose execution method"
-    echo "                                Options: normal, hotspots, performance-snapshot, uarch-exploration, memory-access, all"
-    echo "  --executable=<name>           Choose executable (e.g. 1_sobel_orig or all)"
-    echo "  --times=<N>                   Run each executable N times (default: 1)"
+    echo "  --help                          Show this help message"
+    echo "  --execution-method=<method>     Choose execution method"
+    echo "                                  Options: normal, hotspots, performance-snapshot, uarch-exploration, memory-access, all"
+    echo "  --executable=<name>             Choose executable (e.g. 1_sobel_orig or all)"
+    echo "  --times=<N>                     Run each executable N times (default: 1)"
+    echo "  --calculate-average=<boolean>   Run the average.py script to calculate the average of all saved runs"
+    echo "                                  Options: true, false"
     echo
     exit 0
 }
@@ -40,6 +44,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --times=*)
             RUN_TIMES="${1#*=}"
+            shift
+            ;;
+        --calculate-average=*)
+            CALCULATE_AVERAGE="${1#*=}"
             shift
             ;;
         *)
@@ -185,3 +193,10 @@ for exe in "${selected_exes[@]}"; do
         run_and_diff "$exe" "$method" "$method_flag"
     done
 done
+
+# --- After all runs, calculate averages (if requested) ---
+if [ "$CALCULATE_AVERAGE" = true ]; then
+    echo "> Calculating averages across all normal runs..."
+    cd "$PROJECT_DIR" || exit 1
+    python3 $AVERAGE_SCRIPT
+fi

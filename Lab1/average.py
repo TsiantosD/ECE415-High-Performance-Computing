@@ -8,7 +8,7 @@ BASE_DIR = os.path.join("metrics", "normal")
 
 # Regex to extract runtime
 TIME_PATTERN = re.compile(r"Total time\s*=\s*([\d.]+)\s*seconds")
-
+ 
 # Data structure: {exe_name: [times]}
 runtimes = {}
 
