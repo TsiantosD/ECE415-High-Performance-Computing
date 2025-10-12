@@ -2,7 +2,7 @@
 # ARE NOT EQUIVALENT to tabs. The line after a rule starts with a tab!
 
 #Add any executable you want to be created here.
-EXECUTABLES	= 1_sobel_orig 2_sobel_loop_interchange 3_sobel_loop_unrolling 4_sobel_loop_fusion 5_sobel_function_inlining
+EXECUTABLES	= 1_sobel_orig 2_sobel_loop_interchange 3_sobel_loop_unrolling 4_sobel_loop_fusion 5_sobel_function_inlining 6_sobel_common_subexpression_elimination 7_sobel_strength_reduction
 
 #This is the compiler to use
 CC = icx

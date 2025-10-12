@@ -54,3 +54,32 @@ The optimizations made to the code are noted here. Each version has all the prev
 | 3_sobel_loop_unrolling         |     10 |      0.89895 |      0.00957 |
 | 4_sobel_loop_fusion            |     10 |      0.80815 |      0.00532 |
 | 5_sobel_function_inlining      |     10 |      0.20782 |      0.00059 |
+
+### 6) Common subexpression elimination
+- Minimize duplicate computations by introducing `i_times_SIZE` and `i_times_SIZE_plus_j` variables
+
+| Executable                                         |  #Runs |  Average (s) |  Std Dev (s) |
+| -------------------------------------------------- | ------ | ------------ | ------------ |
+| 1_sobel_orig                                       |     10 |      1.71490 |      0.03946 |
+| 2_sobel_loop_interchange                           |     10 |      1.18228 |      0.00969 |
+| 3_sobel_loop_unrolling                             |     10 |      0.89895 |      0.00957 |
+| 4_sobel_loop_fusion                                |     10 |      0.80815 |      0.00532 |
+| 5_sobel_function_inlining                          |     10 |      0.20782 |      0.00059 |
+| 6_sobel_common_subexpression_elimination           |     10 |      0.22377 |      0.00837 |
+
+### 7) Strength reduction
+- Increment `i_times_SIZE` at the end of the loop instead of multiplying
+- TODO: add lookup table for `res`
+- TODO: do binary AND between 256 and `res` instead of comparison
+- TODO: remove `sqrt` (?)
+
+| Executable                                                   |  #Runs |  Average (s) |  Std Dev (s) |
+| ------------------------------------------------------------ | ------ | ------------ | ------------ |
+| 1_sobel_orig                                                 |     10 |      1.71490 |      0.03946 |
+| 2_sobel_loop_interchange                                     |     10 |      1.18228 |      0.00969 |
+| 3_sobel_loop_unrolling                                       |     10 |      0.89895 |      0.00957 |
+| 4_sobel_loop_fusion                                          |     10 |      0.80815 |      0.00532 |
+| 5_sobel_function_inlining                                    |     10 |      0.20782 |      0.00059 |
+| 6_sobel_common_subexpression_elimination                     |     10 |      0.22377 |      0.00837 |
+| 7_sobel_strength_reduction                                   |     10 |      0.20729 |      0.00030 |
+

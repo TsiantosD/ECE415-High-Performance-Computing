@@ -177,7 +177,7 @@ run_and_diff() {
 
         echo "> Comparing output.grey with golden.grey ..."
         if ! diff "$GOLDEN_FILE" "$OUTPUT_FILE" > /dev/null; then
-            echo "⚠️  Difference found for $exe_name ($method, run $run)!"
+            echo "⚠️ Difference found for $exe_name ($method, run $run)!"
         else
             echo "✅ Output matches golden file for $exe_name ($method, run $run)."
         fi
@@ -195,7 +195,7 @@ for exe in "${selected_exes[@]}"; do
 done
 
 # --- After all runs, calculate averages (if requested) ---
-if [ "$CALCULATE_AVERAGE" = true ]; then
+if [ $CALCULATE_AVERAGE = true ]; then
     echo "> Calculating averages across all normal runs..."
     cd "$PROJECT_DIR" || exit 1
     python3 $AVERAGE_SCRIPT
