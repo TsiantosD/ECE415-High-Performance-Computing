@@ -2,8 +2,6 @@
 
 CPU_CORE=2
 PROJECT_DIR=$(pwd)
-GOLDEN_FILE="$PROJECT_DIR/src/golden.grey"
-OUTPUT_FILE="$PROJECT_DIR/src/output_sobel.grey"
 AVERAGE_SCRIPT="$PROJECT_DIR/average.py"
 
 set -e
@@ -13,6 +11,7 @@ EXEC_METHOD=""
 EXECUTABLE=""
 RUN_TIMES=1
 CALCULATE_AVERAGE=false
+IMAGE_FILE=""
 
 print_help() {
     echo "Usage: $0 [options]"
@@ -22,6 +21,7 @@ print_help() {
     echo "  --execution-method=<method>     Choose execution method"
     echo "                                  Options: normal, hotspots, performance-snapshot, uarch-exploration, memory-access, all"
     echo "  --executable=<name>             Choose executable (e.g. 1_sobel_orig or all)"
+    echo "  --image=<filename>              Choose input image from ./src/input (e.g. 4096-timescapes.grey)"
     echo "  --times=<N>                     Run each executable N times (default: 1)"
     echo "  --calculate-average=<boolean>   Run the average.py script to calculate the average of all saved runs"
     echo "                                  Options: true, false"
@@ -36,19 +36,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --execution-method=*)
             EXEC_METHOD="${1#*=}"
-            shift
             ;;
         --executable=*)
             EXECUTABLE="${1#*=}"
-            shift
+            ;;
+        --image=*)
+            IMAGE_FILE="${1#*=}"
             ;;
         --times=*)
             RUN_TIMES="${1#*=}"
-            shift
             ;;
         --calculate-average=*)
             CALCULATE_AVERAGE="${1#*=}"
-            shift
             ;;
         *)
             echo "Unknown option: $1"
@@ -56,12 +55,60 @@ while [[ $# -gt 0 ]]; do
             exit 1
             ;;
     esac
+    shift
 done
 
-# --- Build ---
+# --- Image selection ---
+INPUT_DIR="$PROJECT_DIR/src/input"
+GOLDEN_DIR="$PROJECT_DIR/src/golden"
+OUTPUT_DIR="$PROJECT_DIR/src/output"
+
+if [[ -z "$IMAGE_FILE" ]]; then
+    echo
+    echo "Available input images:"
+    mapfile -t IMAGES < <(find "$INPUT_DIR" -maxdepth 1 -type f -name "*.grey" -printf "%f\n" | sort)
+    if [[ ${#IMAGES[@]} -eq 0 ]]; then
+        echo "No input images found in $INPUT_DIR!"
+        exit 1
+    fi
+
+    i=1
+    for img in "${IMAGES[@]}"; do
+        echo "[$i] $img"
+        ((i++))
+    done
+    read -rp "Select an image (1-${#IMAGES[@]}): " img_choice
+    echo
+
+    if [[ "$img_choice" =~ ^[0-9]+$ ]] && (( img_choice >= 1 && img_choice <= ${#IMAGES[@]} )); then
+        IMAGE_FILE="${IMAGES[$((img_choice-1))]}"
+    else
+        echo "Invalid choice!"
+        exit 1
+    fi
+fi
+
+# --- Parse SIZE from filename ---
+if [[ "$IMAGE_FILE" =~ ^([0-9]+)-(.+)\.grey$ ]]; then
+    SIZE="${BASH_REMATCH[1]}"
+    IMAGE_NAME="${BASH_REMATCH[2]}"
+else
+    echo "Invalid image filename format! Expected <SIZE>-<NAME>.grey"
+    exit 1
+fi
+
+INPUT_PATH="$INPUT_DIR/$IMAGE_FILE"
+GOLDEN_FILE="$GOLDEN_DIR/${IMAGE_NAME}.grey"
+OUTPUT_FILE="$OUTPUT_DIR/${IMAGE_NAME}.grey"
+
+# --- Clean & build---
 cd ./src || { echo "src folder not found!"; exit 1; }
+echo "> Running make clean in ./src ..."
+make clean || { echo "Make clean!"; exit 1; }
+echo
 echo "> Running make in ./src ..."
-make || { echo "Make failed!"; exit 1; }
+make SIZE="$SIZE" IMAGE_NAME="$IMAGE_NAME" || { echo "Make failed!"; exit 1; }
+echo
 
 # --- Find executables ---
 EXES=()
@@ -195,8 +242,8 @@ for exe in "${selected_exes[@]}"; do
 done
 
 # --- After all runs, calculate averages (if requested) ---
-if [ $CALCULATE_AVERAGE = true ]; then
+if [ "$CALCULATE_AVERAGE" = true ]; then
     echo "> Calculating averages across all normal runs..."
     cd "$PROJECT_DIR" || exit 1
-    python3 $AVERAGE_SCRIPT
+    python3 "$AVERAGE_SCRIPT"
 fi

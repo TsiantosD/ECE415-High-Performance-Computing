@@ -1,6 +1,10 @@
 # Makefile. If you change it, remember than in makefiles multiple spaces
 # ARE NOT EQUIVALENT to tabs. The line after a rule starts with a tab!
 
+# Arguments
+SIZE ?= 4096
+IMAGE_NAME ?= timescapes
+
 #Add any executable you want to be created here.
 EXECUTABLES	= 1_sobel_orig 2_sobel_loop_interchange 3_sobel_loop_unrolling 4_sobel_loop_fusion 5_sobel_function_inlining 6_sobel_common_subexpression_elimination 7_sobel_strength_reduction
 
@@ -8,7 +12,10 @@ EXECUTABLES	= 1_sobel_orig 2_sobel_loop_interchange 3_sobel_loop_unrolling 4_sob
 CC = icx
 
 #These are the flags passed to the compiler. Change accordingly
-CFLAGS = -Wall -O0 -g
+CFLAGS = -Wall -O0 -g -DSIZE=$(SIZE) \
+					  -DINPUT_FILE=\"input/$(SIZE)-$(IMAGE_NAME).grey\" \
+					  -DOUTPUT_FILE=\"output/$(IMAGE_NAME).grey\" \
+					  -DGOLDEN_FILE=\"golden/$(IMAGE_NAME).grey\"
 
 #These are the flags passed to the linker. Nothing in our case
 LDFLAGS = -lm
@@ -25,10 +32,9 @@ all: $(EXECUTABLES)
 # make clean will remove all executables, jpg files and the 
 # output of previous executions.
 clean:
-	rm -f $(EXECUTABLES) *.jpg output_sobel.grey
+	rm -f $(EXECUTABLES) *.jpg output_*.grey
 
-# make image will create the output_sobel.jpg from the output_sobel.grey. 
-# Remember to change this rule if you change the name of the output file.
-image: output_sobel.grey
-	convert -depth 8 -size 4096x4096 GRAY:output_sobel.grey output_sobel.jpg 
+# make image will create the IMAGE_NAME.jpg from the IMAGE_NAME.grey. Remember to pass the SIZE and IMAGE_NAME arguments.
+image: $(IMAGE_NAME).grey
+	convert -depth 8 -size $(SIZE)x$(SIZE) GRAY:$(IMAGE_NAME).grey $(IMAGE_NAME).jpg 
 

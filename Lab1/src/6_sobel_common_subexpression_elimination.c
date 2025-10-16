@@ -7,10 +7,25 @@
 #include <time.h>
 #include <errno.h>
 
-#define SIZE	4096
-#define INPUT_FILE	"input.grey"
-#define OUTPUT_FILE	"output_sobel.grey"
-#define GOLDEN_FILE	"golden.grey"
+#ifndef SIZE
+#warning "SIZE not defined! Using default 4096."
+#define SIZE 4096
+#endif
+
+#ifndef INPUT_FILE
+#warning "INPUT_FILE not defined! Using default input/4096-timescapes.grey."
+#define INPUT_FILE "input/4096-timescapes.grey"
+#endif
+
+#ifndef OUTPUT_FILE
+#warning "OUTPUT_FILE not defined! Using default output/timescapes.grey."
+#define OUTPUT_FILE "output/timescapes.grey"
+#endif
+
+#ifndef GOLDEN_FILE
+#warning "GOLDEN_FILE not defined! Using default golden/timescapes.grey."
+#define GOLDEN_FILE "golden/timescapes.grey"
+#endif
 
 /* The horizontal and vertical operators to be used in the sobel filter */
 char horiz_operator[3][3] = {{-1, 0, 1}, 
@@ -56,7 +71,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0, t;
 	int i, j, i_times_SIZE, i_times_SIZE_plus_j;
-	unsigned int pixel_horizontal, pixel_vertical;
+	unsigned int p;
 	int res;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
@@ -110,36 +125,36 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 
 		for (j = 1; j < SIZE - 1 - remainder; j += unroll_factor) {
 			// pixel (i, j)
-			pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
-			pixel_vertical = CONVOLUTION2D(i, j, input, vert_operator);
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+			p = pow(CONVOLUTION2D(i, j, input, horiz_operator), 2) +
+				pow(CONVOLUTION2D(i, j, input, vert_operator), 2);
+			res = (int)sqrt(p);
 			i_times_SIZE_plus_j = i_times_SIZE + j;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
 			PSNR += t * t;
 
 			// pixel (i, j+1)
-			pixel_horizontal = CONVOLUTION2D(i, j+1, input, horiz_operator);
-			pixel_vertical   = CONVOLUTION2D(i, j+1, input, vert_operator);
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+			p = pow(CONVOLUTION2D(i, j+1, input, horiz_operator), 2) +
+				pow(CONVOLUTION2D(i, j+1, input, vert_operator), 2);
+			res = (int)sqrt(p);
 			i_times_SIZE_plus_j++;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
 			PSNR += t * t;
 
 			// pixel (i, j+2)
-			pixel_horizontal = CONVOLUTION2D(i, j+2, input, horiz_operator);
-			pixel_vertical   = CONVOLUTION2D(i, j+2, input, vert_operator);
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+			p = pow(CONVOLUTION2D(i, j+2, input, horiz_operator), 2) +
+				pow(CONVOLUTION2D(i, j+2, input, vert_operator), 2);
+			res = (int)sqrt(p);
 			i_times_SIZE_plus_j++;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
 			PSNR += t * t;
 
 			// pixel (i, j+3)
-			pixel_horizontal = CONVOLUTION2D(i, j+3, input, horiz_operator);
-			pixel_vertical   = CONVOLUTION2D(i, j+3, input, vert_operator);
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+			p = pow(CONVOLUTION2D(i, j+3, input, horiz_operator), 2) +
+				pow(CONVOLUTION2D(i, j+3, input, vert_operator), 2);
+			res = (int)sqrt(p);
 			i_times_SIZE_plus_j++;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
@@ -150,9 +165,9 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 		switch (remainder) {
 			case 3:
 				j = SIZE - 4;
-				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
-				pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
-				res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+				p = pow(CONVOLUTION2D(i, j, input, horiz_operator), 2) +
+					pow(CONVOLUTION2D(i, j, input, vert_operator), 2);
+				res = (int)sqrt(p);
 				i_times_SIZE_plus_j = i_times_SIZE + j;
 				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];
@@ -160,9 +175,9 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 				j++;
 
 			case 2:
-				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
-            	pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
-				res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+				p = pow(CONVOLUTION2D(i, j, input, horiz_operator), 2) +
+					pow(CONVOLUTION2D(i, j, input, vert_operator), 2);
+				res = (int)sqrt(p);
 				i_times_SIZE_plus_j = i_times_SIZE + j;
 				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];
@@ -170,9 +185,9 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 				j++;
 
 			case 1:
-				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
-            	pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
-            	res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+				p = pow(CONVOLUTION2D(i, j, input, horiz_operator), 2) +
+					pow(CONVOLUTION2D(i, j, input, vert_operator), 2);
+				res = (int)sqrt(p);
 				i_times_SIZE_plus_j = i_times_SIZE + j;
 				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];

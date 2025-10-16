@@ -7,10 +7,25 @@
 #include <time.h>
 #include <errno.h>
 
-#define SIZE	4096
-#define INPUT_FILE	"input.grey"
-#define OUTPUT_FILE	"output_sobel.grey"
-#define GOLDEN_FILE	"golden.grey"
+#ifndef SIZE
+#warning "SIZE not defined! Using default 4096."
+#define SIZE 4096
+#endif
+
+#ifndef INPUT_FILE
+#warning "INPUT_FILE not defined! Using default input/4096-timescapes.grey."
+#define INPUT_FILE "input/4096-timescapes.grey"
+#endif
+
+#ifndef OUTPUT_FILE
+#warning "OUTPUT_FILE not defined! Using default output/timescapes.grey."
+#define OUTPUT_FILE "output/timescapes.grey"
+#endif
+
+#ifndef GOLDEN_FILE
+#warning "GOLDEN_FILE not defined! Using default golden/timescapes.grey."
+#define GOLDEN_FILE "golden/timescapes.grey"
+#endif
 
 /* The horizontal and vertical operators to be used in the sobel filter */
 char horiz_operator[3][3] = {{-1, 0, 1}, 

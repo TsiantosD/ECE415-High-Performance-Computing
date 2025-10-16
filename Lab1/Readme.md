@@ -44,7 +44,6 @@ The optimizations made to the code are noted here. Each version has all the prev
 | 4_sobel_loop_fusion            |     10 |      0.80815 |      0.00532 |
 
 ### 5) Function inlining
-- Remove `pow(..., 2)` function calls and replace with the multiplication of the results
 - Replace the `convolution2D` function with the `CONVOLUTION2D` macro
 
 | Executable                     |  #Runs |  Average (s) |  Std Dev (s) |
@@ -68,6 +67,7 @@ The optimizations made to the code are noted here. Each version has all the prev
 | 6_sobel_common_subexpression_elimination           |     10 |      0.22377 |      0.00837 |
 
 ### 7) Strength reduction
+- Remove `pow(..., 2)` function calls and replace with the multiplication of the results
 - Increment `i_times_SIZE` at the end of the loop instead of multiplying
 - TODO: add lookup table for `res`
 - TODO: do binary AND between 256 and `res` instead of comparison
