@@ -6,7 +6,7 @@ SIZE ?= 4096
 IMAGE_NAME ?= timescapes
 
 #Add any executable you want to be created here.
-EXECUTABLES	= 1_sobel_orig 2_sobel_loop_interchange 3_sobel_loop_unrolling 4_sobel_loop_fusion 5_sobel_function_inlining 6_sobel_common_subexpression_elimination 7_sobel_strength_reduction
+EXECUTABLES	= 1_sobel_orig 2_sobel_loop_interchange 3_sobel_loop_unrolling 4_sobel_loop_fusion 5_sobel_function_inlining 6_sobel_common_subexpression_elimination 7_sobel_strength_reduction 7_sobel_strength_reduction_sqrt_lut
 
 #This is the compiler to use
 CC = icx
@@ -35,6 +35,6 @@ clean:
 	rm -f $(EXECUTABLES) *.jpg output_*.grey
 
 # make image will create the IMAGE_NAME.jpg from the IMAGE_NAME.grey. Remember to pass the SIZE and IMAGE_NAME arguments.
-image: $(IMAGE_NAME).grey
-	convert -depth 8 -size $(SIZE)x$(SIZE) GRAY:$(IMAGE_NAME).grey $(IMAGE_NAME).jpg 
+image: output/$(IMAGE_NAME).grey
+	convert -depth 8 -size $(SIZE)x$(SIZE) GRAY:output/$(IMAGE_NAME).grey output/$(IMAGE_NAME).jpg
 

@@ -122,9 +122,9 @@ if [ ${#EXES[@]} -eq 0 ]; then
 fi
 
 # --- Execution methods ---
-METHODS=("normal" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access")
-METHOD_FLAGS=("" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access")
-METHOD_NAMES=("Normal run" "VTune - Hotspots" "VTune - Performance Snapshot" "VTune - Microarchitecture Exploration" "VTune - Memory Access")
+METHODS=("normal" "hpc-performance" "memory-access" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access")
+METHOD_FLAGS=("" "hpc-performance" "memory-access" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access")
+METHOD_NAMES=("Normal run" "VTune - HPC Performance" "VTune - Memory Access" "VTune - Hotspots" "VTune - Performance Snapshot" "VTune - Microarchitecture Exploration" "VTune - Memory Access")
 
 # --- Determine selected methods ---
 if [[ -n "$EXEC_METHOD" ]]; then
