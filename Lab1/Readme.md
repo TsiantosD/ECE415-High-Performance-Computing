@@ -1,6 +1,34 @@
 # Code Optimizations
 The optimizations made to the code are noted here. Each version has all the previous optimizations plus the new ones. All runs were made on the same performance core of a 12th Gen Intel® Core™ i5-1235U × 12 CPU without any compiler optimizations (`-O0` option).
 
+### How to run
+To run the program, use the `run.sh` helper script. Use `run.sh --help` to see all options the script offers. Example usage:
+
+```cmd
+./run.sh --execution-method=normal --calculate-average=true --times=5
+```
+
+The output of the runs are saved inside the `./metrics/` directory categorized by the execution method.
+
+### Plot averages
+To plot the averages and standard deviation, run the following commands:
+
+```cmd
+python3 -m venv ./venv
+```
+
+```cmd
+pip install -r requirements.txt
+```
+
+Now the plot will be generated every time the `run.sh` script is executed, or you can manually run the `average.py` script:
+
+```
+python3 average.py
+```
+
+> **Note:** The `average.py` script gets the numbers from 
+
 ### 1) Original algorithm
 - Golden version 🪙️
 - Sloooow 🐌️
@@ -33,7 +61,4 @@ The optimizations made to the code are noted here. Each version has all the prev
 ### 7) Strength reduction
 - Remove `pow(..., 2)` function calls and replace with the multiplication of the results
 - Increment `i_times_SIZE` at the end of the loop instead of multiplying
-- TODO: add lookup table for `res`
 - TODO: do binary AND between 256 and `res` instead of comparison
-- TODO: remove `sqrt` (?)
-
