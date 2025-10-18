@@ -120,12 +120,13 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	#pragma omp parallel for reduction(+:PSNR) \
 			private(j, res, i_times_SIZE_plus_j, t)
 	for (i = 1; i < SIZE - 1; i++) {
+		int i_times_SIZE = i * SIZE;
 		for (j = 1; j < SIZE - 1; j++) {
 			// pixel (i, j)
 			unsigned int horz_conv = CONVOLUTION2D(i, j, input, horiz_operator); 
 			unsigned int vert_conv = CONVOLUTION2D(i, j, input, vert_operator);
 			res = sqrt(horz_conv * horz_conv + vert_conv * vert_conv);
-			i_times_SIZE_plus_j = i * SIZE + j;
+			i_times_SIZE_plus_j = i_times_SIZE + j;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char) res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
 			PSNR += t * t;
