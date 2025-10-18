@@ -15,7 +15,7 @@ EXECUTABLES	= 01_sobel_orig 02_sobel_loop_interchange \
 CC = icx
 
 #These are the flags passed to the compiler. Change accordingly
-CFLAGS = -Wall -O0 -fopenmp -g -DSIZE=$(SIZE) \
+CFLAGS = -Wall -O0 -qopenmp -g -DSIZE=$(SIZE) \
 					  -DINPUT_FILE=\"input/$(SIZE)-$(IMAGE_NAME).grey\" \
 					  -DOUTPUT_FILE=\"output/$(IMAGE_NAME).grey\" \
 					  -DGOLDEN_FILE=\"golden/$(IMAGE_NAME).grey\"
