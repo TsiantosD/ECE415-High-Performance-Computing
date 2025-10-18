@@ -4,18 +4,23 @@
 # Arguments
 SIZE ?= 4096
 IMAGE_NAME ?= timescapes
+OPT_LEVEL ?= O0
 
 #Add any executable you want to be created here.
-EXECUTABLES	= 1_sobel_orig 2_sobel_loop_interchange \
-3_sobel_loop_unrolling 4_sobel_loop_fusion 5_sobel_function_inlining \
- 6_sobel_common_subexpression_elimination 7_sobel_strength_reduction \
- 7_sobel_strength_reduction_sqrt_lut 8_sobel_openmp
+EXECUTABLES	= 1_sobel_orig \
+			  2_sobel_loop_interchange \
+			  3_sobel_loop_unrolling \
+			  4_sobel_loop_fusion \
+			  5_sobel_function_inlining \
+ 			  6_sobel_common_subexpression_elimination \
+			  7_sobel_strength_reduction \
+			  8_sobel_openmp
 
 #This is the compiler to use
 CC = icx
 
 #These are the flags passed to the compiler. Change accordingly
-CFLAGS = -Wall -O0 -qopenmp -g -DSIZE=$(SIZE) \
+CFLAGS = -Wall -$(OPT_LEVEL) -qopenmp -g -DSIZE=$(SIZE) \
 					  -DINPUT_FILE=\"input/$(SIZE)-$(IMAGE_NAME).grey\" \
 					  -DOUTPUT_FILE=\"output/$(IMAGE_NAME).grey\" \
 					  -DGOLDEN_FILE=\"golden/$(IMAGE_NAME).grey\"

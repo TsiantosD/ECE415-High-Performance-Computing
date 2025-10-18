@@ -12,6 +12,7 @@ EXECUTABLE=""
 RUN_TIMES=1
 CALCULATE_AVERAGE=false
 IMAGE_FILE=""
+OPTIMIZATION=O0
 
 print_help() {
     echo "Usage: $0 [options]"
@@ -24,6 +25,7 @@ print_help() {
     echo "  --image=<filename>              Choose input image from ./src/input (e.g. 4096-timescapes.grey)"
     echo "  --times=<N>                     Run each executable N times (default: 1)"
     echo "  --calculate-average=<boolean>   Run the average.py script to calculate the average of all saved runs"
+    echo "  --optimization=<O0|O1|O2|O3>    Choose compiler optimizations. Default: O0"
     echo "                                  Options: true, false"
     echo
     exit 0
@@ -48,6 +50,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --calculate-average=*)
             CALCULATE_AVERAGE="${1#*=}"
+            ;;
+        --optimization=*)
+            OPTIMIZATION="${1#*=}"
+            if [[ ! "$OPTIMIZATION" =~ ^O[0-3]$ ]]; then
+                echo "Invalid optimization level: $OPTIMIZATION"
+                echo "Valid options: O0, O1, O2, O3"
+                exit 1
+            fi
             ;;
         *)
             echo "Unknown option: $1"
@@ -107,7 +117,7 @@ echo "> Running make clean in ./src ..."
 make clean || { echo "Make clean!"; exit 1; }
 echo
 echo "> Running make in ./src ..."
-make SIZE="$SIZE" IMAGE_NAME="$IMAGE_NAME" || { echo "Make failed!"; exit 1; }
+make SIZE="$SIZE" IMAGE_NAME="$IMAGE_NAME" OPT_LEVEL="$OPTIMIZATION" || { echo "Make failed!"; exit 1; }
 echo
 
 # --- Find executables ---
@@ -216,10 +226,21 @@ run_and_diff() {
         local log_file="$metrics_dir/${exe_name}_run${run}.log"
         echo "> [${run}/${RUN_TIMES}] Running $exe_name with method: $method ..."
 
-        if [ "$method" = "normal" ]; then
-            taskset -c "$CPU_CORE" "./$exe_name" > "$log_file" 2>&1
+        # Run based on method and whether it's an OpenMP executable
+        if [[ "$exe_name" == *openmp* ]]; then
+            # Run normally without taskset
+            if [ "$method" = "normal" ]; then
+                "./$exe_name" > "$log_file" 2>&1
+            else
+                vtune -collect "$method_flag" -result-dir "$metrics_dir/run_${run}" -- "./$exe_name" > "$log_file" 2>&1
+            fi
         else
-            taskset -c $CPU_CORE vtune -collect "$method_flag" -result-dir "$metrics_dir/run_${run}" -- "./$exe_name" > "$log_file" 2>&1
+            # Run pinned to a specific CPU core
+            if [ "$method" = "normal" ]; then
+                taskset -c "$CPU_CORE" "./$exe_name" > "$log_file" 2>&1
+            else
+                taskset -c "$CPU_CORE" vtune -collect "$method_flag" -result-dir "$metrics_dir/run_${run}" -- "./$exe_name" > "$log_file" 2>&1
+            fi
         fi
 
         echo "> Comparing output.grey with golden.grey ..."
