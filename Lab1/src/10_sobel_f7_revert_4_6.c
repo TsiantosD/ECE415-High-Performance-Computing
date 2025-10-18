@@ -53,14 +53,18 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
  * value is the convolution of the operator with the neighboring pixels of the*
  * pixel we process.														  */
 int convolution2D(int posy, int posx, const unsigned char *input, char operator[][3]) {
-	int i, j, res;
+	int res, input_index = (posy - 1)*SIZE + posx - 1;
   
 	res = 0;
-	for (i = -1; i <= 1; i++) {
-		for (j = -1; j <= 1; j++) {
-			res += input[(posy + i)*SIZE + posx + j] * operator[i+1][j+1];
-		}
-	}
+	res += input[input_index] * operator[0][0];
+	res += input[input_index + 1] * operator[0][1];
+	res += input[input_index + 2] * operator[0][2];
+	res += input[input_index + SIZE] * operator[1][0];
+	res += input[input_index + SIZE + 1] * operator[1][1];
+	res += input[input_index + SIZE + 2] * operator[1][2];
+	res += input[input_index + SIZE + SIZE] * operator[2][0];
+	res += input[input_index + SIZE + SIZE + 1] * operator[2][1];
+	res += input[input_index + SIZE + SIZE + 2] * operator[2][2];
 	return(res);
 }
 
@@ -130,10 +134,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 
 			/* If the resulting value is greater than 255, clip it *
 			 * to 255.											   */
-			if (res > 255)
-				output[i*SIZE + j] = 255;      
-			else
-				output[i*SIZE + j] = (unsigned char)res;
+			output[i*SIZE + j] = res > 255 ? 255 : (unsigned char)res;
 		}
 	}
 
