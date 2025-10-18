@@ -107,7 +107,7 @@ for (size, opt, method, _) in sorted({(s, o, m, '') for (s, o, m, _) in runtimes
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels)
     ax.set_xlabel("Time (seconds)")
-    ax.set_title(f"Average Runtime — {size} | {opt} | {method}")
+    ax.set_title(f"Average Runtime — {size}x{size} (-{opt}) ")
     ax.legend()
     plt.tight_layout()
 
