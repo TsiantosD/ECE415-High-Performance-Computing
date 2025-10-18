@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <omp.h>
 #include <errno.h>
 
 #ifndef SIZE
@@ -70,8 +71,7 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0, t;
-	int i, j, i_times_SIZE, i_times_SIZE_plus_j;
-	unsigned int pixel_horizontal, pixel_vertical;
+	unsigned int p;
 	int res;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
@@ -84,7 +84,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
      * algorithm, therefore make sure to initialize them with 0s.		 */
 	memset(output, 0, SIZE*sizeof(unsigned char));
 	memset(&output[SIZE*(SIZE-1)], 0, SIZE*sizeof(unsigned char));
-	for (i = 1; i < SIZE-1; i++) {
+	for (int i = 1; i < SIZE-1; i++) {
 		output[i*SIZE] = 0;
 		output[i*SIZE + SIZE - 1] = 0;
 	}
@@ -120,87 +120,77 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 
-	i_times_SIZE = SIZE;
-
-	for (i = 1; i < SIZE - 1; i++) {
+	for (int i = 1; i < SIZE - 1; i++) {
 		#pragma omp parallel for \
-		private(i_times_SIZE_plus_j, i_times_SIZE, pixel_horizontal, pixel_vertical, res, t) \
 		reduction(+:PSNR)
-		for (j = 1; j < SIZE - 1 - remainder; j += unroll_factor) {
+		for (int j = 1; j < SIZE - 1 - remainder; j += unroll_factor) {
 			// pixel (i, j)
-			pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
-			pixel_vertical = CONVOLUTION2D(i, j, input, vert_operator);
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			i_times_SIZE_plus_j = i_times_SIZE + j;
-			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
-			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
+			p = pow(CONVOLUTION2D(i, j, input, horiz_operator), 2) +
+				pow(CONVOLUTION2D(i, j, input, vert_operator), 2);
+			res = (int)sqrt(p);
+			output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+			t = (output[i*SIZE+j  ] - golden[i*SIZE+j  ]);
 			PSNR += t * t;
 
 			// pixel (i, j+1)
-			pixel_horizontal = CONVOLUTION2D(i, j+1, input, horiz_operator);
-			pixel_vertical   = CONVOLUTION2D(i, j+1, input, vert_operator);
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			i_times_SIZE_plus_j++;
-			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
-			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
+			p = pow(CONVOLUTION2D(i, j+1, input, horiz_operator), 2) +
+				pow(CONVOLUTION2D(i, j+1, input, vert_operator), 2);
+			res = (int)sqrt(p);
+			output[i*SIZE + j+1] = (res > 255) ? 255 : (unsigned char)res;
+			t = (output[i*SIZE+j+1] - golden[i*SIZE+j+1]);
 			PSNR += t * t;
 
 			// pixel (i, j+2)
-			pixel_horizontal = CONVOLUTION2D(i, j+2, input, horiz_operator);
-			pixel_vertical   = CONVOLUTION2D(i, j+2, input, vert_operator);
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			i_times_SIZE_plus_j++;
-			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
-			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
+			p = pow(CONVOLUTION2D(i, j+2, input, horiz_operator), 2) +
+				pow(CONVOLUTION2D(i, j+2, input, vert_operator), 2);
+			res = (int)sqrt(p);
+			output[i*SIZE + j+2] = (res > 255) ? 255 : (unsigned char)res;
+			t = (output[i*SIZE+j+2] - golden[i*SIZE+j+2]);
 			PSNR += t * t;
 
 			// pixel (i, j+3)
-			pixel_horizontal = CONVOLUTION2D(i, j+3, input, horiz_operator);
-			pixel_vertical   = CONVOLUTION2D(i, j+3, input, vert_operator);
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			i_times_SIZE_plus_j++;
-			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
-			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
+			p = pow(CONVOLUTION2D(i, j+3, input, horiz_operator), 2) +
+				pow(CONVOLUTION2D(i, j+3, input, vert_operator), 2);
+			res = (int)sqrt(p);
+			output[i*SIZE + j+3] = (res > 255) ? 255 : (unsigned char)res;
+			t = (output[i*SIZE+j+3] - golden[i*SIZE+j+3]);
 			PSNR += t * t;
 		}
 
 		/* handle leftover columns */
+		int j = 0;
+		
 		switch (remainder) {
 			case 3:
 				j = SIZE - 4;
-				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
-				pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
-				res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-				i_times_SIZE_plus_j = i_times_SIZE + j;
-				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
-				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];
+				p = pow(CONVOLUTION2D(i, j, input, horiz_operator), 2) +
+					pow(CONVOLUTION2D(i, j, input, vert_operator), 2);
+				res = (int)sqrt(p);
+				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				t = output[i*SIZE + SIZE-4] - golden[i*SIZE + SIZE-4];
 				PSNR += t * t;
 				j++;
 
 			case 2:
-				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
-            	pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
-				res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-				i_times_SIZE_plus_j = i_times_SIZE + j;
-				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
-				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];
+				p = pow(CONVOLUTION2D(i, j, input, horiz_operator), 2) +
+					pow(CONVOLUTION2D(i, j, input, vert_operator), 2);
+				res = (int)sqrt(p);
+				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				t = output[i*SIZE + SIZE-3] - golden[i*SIZE + SIZE-3];
 				PSNR += t * t;
 				j++;
 
 			case 1:
-				pixel_horizontal = CONVOLUTION2D(i, j, input, horiz_operator);
-            	pixel_vertical   = CONVOLUTION2D(i, j, input, vert_operator);
-            	res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-				i_times_SIZE_plus_j = i_times_SIZE + j;
-				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
-				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];
+				p = pow(CONVOLUTION2D(i, j, input, horiz_operator), 2) +
+					pow(CONVOLUTION2D(i, j, input, vert_operator), 2);
+				res = (int)sqrt(p);
+				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
+				t = output[i*SIZE + SIZE-2] - golden[i*SIZE + SIZE-2];
 				PSNR += t * t;
 
 			default:
 				break;
 		}
-
-		i_times_SIZE += SIZE;
 	}
   
 	PSNR /= (double)(SIZE*SIZE);
