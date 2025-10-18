@@ -72,7 +72,7 @@ int convolution2D(int posy, int posx, const unsigned char *input, char operator[
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0, t;
-	int i, j;
+	int i, j, horiz_conv, vert_conv, out_minus_gold;
 	unsigned int p;
 	int res;
 	struct timespec  tv1, tv2;
@@ -123,8 +123,9 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 		for (j=1; j<SIZE-1; j+=1) {
 			/* Apply the sobel filter and calculate the magnitude *
 			 * of the derivative.								  */
-			p = convolution2D(i, j, input, horiz_operator) * convolution2D(i, j, input, horiz_operator) + 
-				convolution2D(i, j, input, vert_operator) * convolution2D(i, j, input, vert_operator);
+			horiz_conv = convolution2D(i, j, input, horiz_operator);
+			vert_conv = convolution2D(i, j, input, vert_operator);
+			p = horiz_conv * horiz_conv + vert_conv * vert_conv;
 			res = (int)sqrt(p);
 
 			/* If the resulting value is greater than 255, clip it *
@@ -140,7 +141,8 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	 * the MSE and then the PSNR.									 */
 	for (i=1; i<SIZE-1; i++) {
 		for ( j=1; j<SIZE-1; j++) {
-			t = (output[i*SIZE+j] - golden[i*SIZE+j]) * (output[i*SIZE+j] - golden[i*SIZE+j]);
+			out_minus_gold = (output[i*SIZE+j] - golden[i*SIZE+j]);
+			t = out_minus_gold * out_minus_gold;
 			PSNR += t;
 		}
 	}
