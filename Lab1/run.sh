@@ -116,7 +116,7 @@ cd ./src || { echo "src folder not found!"; exit 1; }
 echo "> Running make clean in ./src ..."
 make clean || { echo "Make clean!"; exit 1; }
 echo
-echo "> Running make in ./src ..."
+echo "> Running make in ./src with size: $SIZE and optimization: $OPTIMIZATION ..."
 make SIZE="$SIZE" IMAGE_NAME="$IMAGE_NAME" OPT_LEVEL="$OPTIMIZATION" || { echo "Make failed!"; exit 1; }
 echo
 
@@ -218,13 +218,16 @@ fi
 # --- Function to run executable and diff ---
 run_and_diff() {
     local exe_name="${exe#./}"
-    local timestamp=$(date +"%Y%m%d_%H%M%S")
-    local metrics_dir="../metrics/${method}/${timestamp}_${exe_name}"
+    local timestamp
+    timestamp=$(date +"%Y%m%d_%H%M%S")
+
+    # Folder hierarchy: metrics/<SIZE>/<OPTIMIZATION>/<METHOD>/<timestamp>_<exe_name>
+    local metrics_dir="../metrics/${SIZE}/${OPTIMIZATION}/${method}/${timestamp}_${exe_name}"
     mkdir -p "$metrics_dir"
 
     for ((run=1; run<=RUN_TIMES; run++)); do
         local log_file="$metrics_dir/${exe_name}_run${run}.log"
-        echo "> [${run}/${RUN_TIMES}] Running $exe_name with method: $method ..."
+        echo "> [${run}/${RUN_TIMES}] Running $exe_name | Method: $method | Opt: $OPTIMIZATION | Size: $SIZE ..."
 
         # Run based on method and whether it's an OpenMP executable
         if [[ "$exe_name" == *openmp* ]]; then
@@ -245,9 +248,9 @@ run_and_diff() {
 
         echo "> Comparing output.grey with golden.grey ..."
         if ! diff "$GOLDEN_FILE" "$OUTPUT_FILE" > /dev/null; then
-            echo "⚠️ Difference found for $exe_name ($method, run $run)!"
+            echo "⚠️ Difference found for $exe_name ($method, run $run, $OPTIMIZATION, size $SIZE)!"
         else
-            echo "✅ Output matches golden file for $exe_name ($method, run $run)."
+            echo "✅ Output matches golden file for $exe_name ($method, run $run, $OPTIMIZATION, size $SIZE)."
         fi
         echo
     done
