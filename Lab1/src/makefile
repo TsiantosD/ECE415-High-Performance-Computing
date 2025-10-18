@@ -6,10 +6,10 @@ SIZE ?= 4096
 IMAGE_NAME ?= timescapes
 
 #Add any executable you want to be created here.
-EXECUTABLES	= 1_sobel_orig 2_sobel_loop_interchange \
-3_sobel_pow_reduction 4_sobel_index_reduction 5_sobel_ternary_op \
-6_sobel_loop_fusion 7_sobel_loop_unroll_conv 8_sobel_f7_revert_4_5_6 \
-9_sobel_f7_revert_4_5 10_sobel_f7_revert_4_6
+EXECUTABLES	= 01_sobel_orig 02_sobel_loop_interchange \
+03_sobel_pow_reduction 04_sobel_index_reduction 05_sobel_ternary_op \
+06_sobel_loop_fusion 07_sobel_loop_unroll_conv 08_sobel_f7_r4_5_6 \
+09_sobel_f7_r4_5 10_sobel_f7_r4_6 11_sobel_f7_r6
 
 #This is the compiler to use
 CC = icx
