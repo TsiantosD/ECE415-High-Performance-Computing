@@ -74,10 +74,18 @@ overlay_height = 0.6
 y_pos = range(len(labels))
 
 # Draw main bars (average runtime)
-ax.barh(y_pos, averages, color="#0096FF", edgecolor="white", height=bar_height, label="Average runtime")
+bars = ax.barh(y_pos, averages, color="#0096FF", edgecolor="white", height=bar_height, label="Average runtime")
 
 # Draw smaller bars on top for standard deviation
 ax.barh([y for y in y_pos], stdevs, left=0, color="#C04000", edgecolor="white", height=overlay_height, label="Std Dev")
+
+# Add value labels
+for i, bar in enumerate(bars):
+    width = bar.get_width()
+    ax.text(width + max(averages) * 0.01,
+        bar.get_y() + bar.get_height() / 2,
+        f"{averages[i]:.3f}s \n± {stdevs[i]:.3f}",
+        va='center', ha='left', fontsize=8, color='black')
 
 # Labels and formatting
 ax.set_yticks(y_pos)
