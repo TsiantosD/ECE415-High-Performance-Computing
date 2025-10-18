@@ -53,22 +53,14 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
  * value is the convolution of the operator with the neighboring pixels of the*
  * pixel we process.														  */
 int convolution2D(int posy, int posx, const unsigned char *input, char operator[][3]) {
-	int res;
+	int i, j, res;
   
 	res = 0;
-
-	res += input[(posy - 1) * SIZE + posx - 1] * operator[0][0];
-	res += input[(posy - 1) * SIZE + posx    ] * operator[0][1];
-	res += input[(posy - 1) * SIZE + posx + 1] * operator[0][2];
-
-	res += input[(posy    ) * SIZE + posx - 1] * operator[1][0];
-	res += input[(posy    ) * SIZE + posx    ] * operator[1][1];
-	res += input[(posy    ) * SIZE + posx + 1] * operator[1][2];
-
-	res += input[(posy + 1) * SIZE + posx - 1] * operator[2][0];
-	res += input[(posy + 1) * SIZE + posx    ] * operator[2][1];
-	res += input[(posy + 1) * SIZE + posx + 1] * operator[2][2];
-
+	for (i = -1; i <= 1; i++) {
+		for (j = -1; j <= 1; j++) {
+			res += input[(posy + i)*SIZE + posx + j] * operator[i+1][j+1];
+		}
+	}
 	return(res);
 }
 
@@ -85,9 +77,6 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	int res;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
-
-	int unroll_factor = 4;
-	int remainder = (SIZE - 2) % unroll_factor;
 
 	/* The first and last row of the output array, as well as the first  *
      * and last element of each column are not going to be filled by the *
@@ -129,70 +118,30 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
   
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
-
-	for (i = 1; i < SIZE - 1; i++) {
-		for (j = 1; j < SIZE - 1 - remainder; j += unroll_factor) {
-			// pixel (i, j)
-			p = pow(convolution2D(i, j, input, horiz_operator), 2) +
-				pow(convolution2D(i, j, input, vert_operator), 2);
+	/* For each pixel of the output image */
+	for (i=1; i<SIZE-1; i+=1) {
+		for (j=1; j<SIZE-1; j+=1) {
+			/* Apply the sobel filter and calculate the magnitude *
+			 * of the derivative.								  */
+			p = convolution2D(i, j, input, horiz_operator) * convolution2D(i, j, input, horiz_operator) + 
+				convolution2D(i, j, input, vert_operator) * convolution2D(i, j, input, vert_operator);
 			res = (int)sqrt(p);
-			output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
-			t = pow((output[i*SIZE+j  ] - golden[i*SIZE+j  ]),2);
-			PSNR += t;
 
-			// pixel (i, j+1)
-			p = pow(convolution2D(i, j+1, input, horiz_operator), 2) +
-				pow(convolution2D(i, j+1, input, vert_operator), 2);
-			res = (int)sqrt(p);
-			output[i*SIZE + j+1] = (res > 255) ? 255 : (unsigned char)res;
-			t = pow((output[i*SIZE+j+1] - golden[i*SIZE+j+1]),2);
-			PSNR += t;
-
-			// pixel (i, j+2)
-			p = pow(convolution2D(i, j+2, input, horiz_operator), 2) +
-				pow(convolution2D(i, j+2, input, vert_operator), 2);
-			res = (int)sqrt(p);
-			output[i*SIZE + j+2] = (res > 255) ? 255 : (unsigned char)res;
-			t = pow((output[i*SIZE+j+2] - golden[i*SIZE+j+2]),2);
-			PSNR += t;
-
-			// pixel (i, j+3)
-			p = pow(convolution2D(i, j+3, input, horiz_operator), 2) +
-				pow(convolution2D(i, j+3, input, vert_operator), 2);
-			res = (int)sqrt(p);
-			output[i*SIZE + j+3] = (res > 255) ? 255 : (unsigned char)res;
-			t = pow((output[i*SIZE+j+3] - golden[i*SIZE+j+3]),2);
-			PSNR += t;
+			/* If the resulting value is greater than 255, clip it *
+			 * to 255.											   */
+			if (res > 255)
+				output[i*SIZE + j] = 255;      
+			else
+				output[i*SIZE + j] = (unsigned char)res;
 		}
+	}
 
-		/* handle leftover columns */
-		switch (remainder) {
-			case 3:
-				j = SIZE - 4;
-				p = pow(convolution2D(i, j, input, horiz_operator), 2) +
-					pow(convolution2D(i, j, input, vert_operator), 2);
-				res = (int)sqrt(p);
-				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
-				PSNR += pow((output[i*SIZE + SIZE-4] - golden[i*SIZE + SIZE-4]), 2);
-				j++;
-
-			case 2:
-				p = pow(convolution2D(i, j, input, horiz_operator), 2) +
-					pow(convolution2D(i, j, input, vert_operator), 2);
-				res = (int)sqrt(p);
-				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
-				PSNR += pow((output[i*SIZE + SIZE-3] - golden[i*SIZE + SIZE-3]), 2);
-				j++;
-
-			case 1:
-				p = pow(convolution2D(i, j, input, horiz_operator), 2) +
-					pow(convolution2D(i, j, input, vert_operator), 2);
-				res = (int)sqrt(p);
-				output[i*SIZE + j] = (res > 255) ? 255 : (unsigned char)res;
-				PSNR += pow((output[i*SIZE + SIZE-2] - golden[i*SIZE + SIZE-2]), 2);
-
-			default:
-				break;
+	/* Now run through the output and the golden output to calculate *
+	 * the MSE and then the PSNR.									 */
+	for (i=1; i<SIZE-1; i++) {
+		for ( j=1; j<SIZE-1; j++) {
+			t = (output[i*SIZE+j] - golden[i*SIZE+j]) * (output[i*SIZE+j] - golden[i*SIZE+j]);
+			PSNR += t;
 		}
 	}
   
