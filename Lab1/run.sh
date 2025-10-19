@@ -268,6 +268,8 @@ done
 # --- After all runs, calculate averages (if requested) ---
 if [ "$CALCULATE_AVERAGE" = true ]; then
     echo "> Calculating averages across all normal runs..."
+    source $PROJECT_DIR/venv/bin/activate
+    pip install -r $PROJECT_DIR/requirements.txt > /dev/null
     cd "$PROJECT_DIR" || exit 1
     python3 "$AVERAGE_SCRIPT"
 fi
