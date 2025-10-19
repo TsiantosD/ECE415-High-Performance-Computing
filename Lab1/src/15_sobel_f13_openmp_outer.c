@@ -107,6 +107,8 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 	/* For each pixel of the output image */
+	#pragma omp parallel for \
+		private(j, res, horiz_conv, vert_conv, p)
 	for (i=1; i<SIZE-1; i+=1, input_index += 2) {
 		for (j=1; j<SIZE-1; j+=1, input_index += 1) {
 			/* Apply the sobel filter and calculate the magnitude *
@@ -138,7 +140,10 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 
 			/* If the resulting value is greater than 255, clip it *
 			 * to 255.											   */
-			output[i*SIZE + j] = (unsigned char) (res > 255 ? 255 : res);
+			if (res > 255)
+				output[i*SIZE + j] = 255;      
+			else
+				output[i*SIZE + j] = (unsigned char)res;
 		}
 	}
 
