@@ -108,8 +108,8 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 	/* For each pixel of the output image */
 	#pragma omp parallel for \
-		private(j, res, horiz_conv, vert_conv, p)
-	for (i=1; i<SIZE-1; i+=1, input_index += 2) {
+		private(j, res, input_index, horiz_conv, vert_conv, p)
+	for (i=1; i<SIZE-1; i+=1) {
 		for (j=1; j<SIZE-1; j+=1, input_index += 1) {
 			/* Apply the sobel filter and calculate the magnitude *
 			 * of the derivative.								  */
@@ -145,6 +145,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 			else
 				output[i*SIZE + j] = (unsigned char)res;
 		}
+		input_index += 2;
 	}
 
 	/* Now run through the output and the golden output to calculate *
