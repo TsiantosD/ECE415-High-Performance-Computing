@@ -43,7 +43,7 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0;
-	unsigned long long sum_input = 0, sum_golden = 0;
+	unsigned long long sum_input = 0, sum_golden = 0, temp_out = 0, second_term = 0;
 	int i, j, i_times_SIZE, i_times_SIZE_plus_j, top_row, bottom_row;
 	unsigned int pixel_horizontal, pixel_vertical;
 	int res;
@@ -118,11 +118,10 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 							  input[bottom_row + 1] * (-1);
 
 			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			sum_input += (
-				output[i_times_SIZE_plus_j] = (res > 255)
-					? 255
-					: (unsigned char)res
-				);
+			temp_out = output[i_times_SIZE_plus_j] = (res > 255)
+				? 255
+				: (unsigned char)res;
+			sum_input += temp_out * temp_out;
 		}
 		i_times_SIZE += SIZE;
 	}
@@ -130,11 +129,14 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	for (i=1; i<SIZE-1; i++) {
 		i_times_SIZE = i * SIZE;
 		for ( j=1; j<SIZE-1; j++ ) {
-			sum_golden += golden[i_times_SIZE + j];
+			i_times_SIZE_plus_j = i_times_SIZE + j;
+			temp_out = golden[i_times_SIZE_plus_j];
+			sum_golden += temp_out * temp_out;
+			second_term += temp_out * output[i_times_SIZE_plus_j];
 		}
 	}
 
-	PSNR = sum_input * sum_input - 2 * sum_input * sum_golden + sum_golden * sum_golden;
+	PSNR = sum_input - 2 * second_term + sum_golden;
   
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);
