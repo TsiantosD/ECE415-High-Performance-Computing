@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GOLDEN_VERSION=1_sobel_orig
+GOLDEN_VERSION=01_sobel_orig
 
 # Usage:
 # ./generate-golden.sh SIZE-IMAGE_NAME.png

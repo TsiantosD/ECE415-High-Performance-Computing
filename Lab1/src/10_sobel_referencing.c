@@ -103,7 +103,6 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 		unsigned char *out_row = &output[i_times_SIZE];
 		
 		for (j = 1; j < SIZE - 1; j++) {
-			// Strength reduction
 			pixel_horizontal = -top_row[j - 1] + top_row[j + 1];
 			pixel_vertical = top_row[j - 1] + (top_row[j] << 1) + top_row[j + 1];
 			pixel_horizontal += -(mid_row[j - 1] << 1) + (mid_row[j + 1] << 1)  + -bottom_row[j - 1]+ bottom_row[j + 1];
