@@ -52,6 +52,25 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
  * operator the operator we apply (horizontal or vertical). The function ret. *
  * value is the convolution of the operator with the neighboring pixels of the*
  * pixel we process.														  */
+static inline int convolution2d_horz(int y, int x, const unsigned char *input) {
+    int idx0 = (y - 1) * SIZE + (x - 1);
+    int idx1 = idx0 + SIZE;
+    int idx2 = idx1 + SIZE;
+
+    return  input[idx0    ] * -1 + input[idx0 + 2] *  1 +
+            input[idx1    ] * -2 + input[idx1 + 2] *  2 +
+            input[idx2    ] * -1 + input[idx2 + 2] *  1;
+}
+
+static inline int convolution2d_vert(int y, int x, const unsigned char *input) {
+    int idx0 = (y - 1) * SIZE + (x - 1);
+    int idx1 = idx0 + SIZE;
+    int idx2 = idx1 + SIZE;
+
+    return  input[idx0    ] *  1 + input[idx0 + 1] *  2 + input[idx0 + 2] *  1 +
+            input[idx2    ] * -1 + input[idx2 + 1] * -2 + input[idx2 + 2] * -1;
+}
+
 
 
 /* The main computational function of the program. The input, output and *
@@ -65,11 +84,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	int res;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
-	unsigned int pixel_horizontal, pixel_vertical;
-	unsigned long long sum_input = 0, sum_golden = 0;
 
-
-	
 	/* The first and last row of the output array, as well as the first  *
      * and last element of each column are not going to be filled by the *
      * algorithm, therefore make sure to initialize them with 0s.		 */
@@ -111,37 +126,20 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 
-	#pragma omp parallel for \
-	private(j, res, i_times_SIZE_plus_j, t, pixel_horizontal, pixel_vertical) \
-	reduction(+:sum_input)
+	#pragma omp parallel for private(j, res, i_times_SIZE_plus_j, t)
 	for (i = 1; i < SIZE - 1; i++) {
-		// Referencing
-		const unsigned char *top_row = &input[(i - 1) * SIZE];
-		const unsigned char *bottom_row = &input[(i + 1) * SIZE];
-		const unsigned char *mid_row = &input[i * SIZE];
-		unsigned char *out_row = &output[i * SIZE];
-		
+		int i_times_SIZE = i * SIZE;
 		for (j = 1; j < SIZE - 1; j++) {
-			// Strength reduction
-			pixel_horizontal = -top_row[j - 1] + top_row[j + 1];
-			pixel_vertical = top_row[j - 1] + (top_row[j] << 1) + top_row[j + 1];
-			pixel_horizontal += -(mid_row[j - 1] << 1) + (mid_row[j + 1] << 1)  + -bottom_row[j - 1]+ bottom_row[j + 1];
-			pixel_vertical += -bottom_row[j - 1] + -(bottom_row[j] << 1) + -bottom_row[j + 1];
-			
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			
-			sum_input += (out_row[j] = (res > 255) ? 255 : (unsigned char)res);
+			// pixel (i, j)
+			unsigned int horz_conv = convolution2d_horz(i, j, input); 
+			unsigned int vert_conv = convolution2d_vert(i, j, input);
+			res = sqrt(horz_conv * horz_conv + vert_conv * vert_conv);
+			i_times_SIZE_plus_j = i_times_SIZE + j;
+			output[i_times_SIZE + j] = (res > 255) ? 255 : (unsigned char) res;
+			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
+			PSNR += t * t;
 		}
 	}
-
-	#pragma omp parallel for reduction(+:sum_golden)
-	for (int i = 1; i < SIZE - 1; i++) {
-		const unsigned char *row = &golden[i * SIZE + 1];
-		for (int j = 0; j < SIZE - 2; j++) sum_golden += row[j];
-	}
-
-	PSNR = sum_input * sum_input - (sum_input << 1) * sum_golden + sum_golden * sum_golden;
-  
   
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);

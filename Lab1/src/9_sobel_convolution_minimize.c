@@ -94,9 +94,11 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	i_times_SIZE = SIZE;
 
 	for (i = 1; i < SIZE - 1; i++) {
+		int inc_i_times_SIZE = (i + 1) * SIZE;
+		int dec_i_times_SIZE = (i - 1) * SIZE;
 		for (j = 1; j < SIZE - 1; j++) {
-			top_row = (i - 1) * SIZE + j;
-			bottom_row = (i + 1) * SIZE + j;
+			top_row = dec_i_times_SIZE + j;
+			bottom_row = inc_i_times_SIZE + j;
 			i_times_SIZE_plus_j = i_times_SIZE + j;
 
 			pixel_horizontal = input[top_row - 1] * (-1) +

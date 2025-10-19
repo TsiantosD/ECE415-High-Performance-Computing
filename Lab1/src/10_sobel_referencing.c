@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <errno.h>
-#include <omp.h>
 
 #ifndef SIZE
 #warning "SIZE not defined! Using default 4096."
@@ -28,14 +27,6 @@
 #define GOLDEN_FILE "golden/timescapes.grey"
 #endif
 
-/* The horizontal and vertical operators to be used in the sobel filter */
-char horiz_operator[3][3] = {{-1, 0, 1}, 
-                             {-2, 0, 2}, 
-                             {-1, 0, 1}};
-char vert_operator[3][3] = {{1, 2, 1}, 
-                            {0, 0, 0}, 
-                            {-1, -2, -1}};
-
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden);
 
 /* The arrays holding the input image, the output image and the output used *
@@ -45,31 +36,20 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
  * order (element after element within each row and row after row. 			*/
 unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 
-
-/* Implement a 2D convolution of the matrix with the operator */
-/* posy and posx correspond to the vertical and horizontal disposition of the *
- * pixel we process in the original image, input is the input image and       *
- * operator the operator we apply (horizontal or vertical). The function ret. *
- * value is the convolution of the operator with the neighboring pixels of the*
- * pixel we process.														  */
-
-
 /* The main computational function of the program. The input, output and *
  * golden arguments are pointers to the arrays used to store the input   *
  * image, the output produced by the algorithm and the output used as    *
  * golden standard for the comparisons.									 */
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
-	double PSNR = 0, t;
-	int i, j, i_times_SIZE_plus_j;
+	double PSNR = 0;
+	unsigned long long sum_input = 0, sum_golden = 0;
+	int i, j, i_times_SIZE, i_times_SIZE_plus_j, top_row, bottom_row;
+	unsigned int pixel_horizontal, pixel_vertical;
 	int res;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
-	unsigned int pixel_horizontal, pixel_vertical;
-	unsigned long long sum_input = 0, sum_golden = 0;
 
-
-	
 	/* The first and last row of the output array, as well as the first  *
      * and last element of each column are not going to be filled by the *
      * algorithm, therefore make sure to initialize them with 0s.		 */
@@ -111,15 +91,16 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 
-	#pragma omp parallel for \
-	private(j, res, i_times_SIZE_plus_j, t, pixel_horizontal, pixel_vertical) \
-	reduction(+:sum_input)
+	i_times_SIZE = SIZE;
+	int inc_i_times_SIZE = SIZE << 1;
+	int dec_i_times_SIZE = 0;
+
 	for (i = 1; i < SIZE - 1; i++) {
 		// Referencing
-		const unsigned char *top_row = &input[(i - 1) * SIZE];
-		const unsigned char *bottom_row = &input[(i + 1) * SIZE];
-		const unsigned char *mid_row = &input[i * SIZE];
-		unsigned char *out_row = &output[i * SIZE];
+		const unsigned char *top_row = &input[dec_i_times_SIZE];
+		const unsigned char *bottom_row = &input[inc_i_times_SIZE];
+		const unsigned char *mid_row = &input[i_times_SIZE];
+		unsigned char *out_row = &output[i_times_SIZE];
 		
 		for (j = 1; j < SIZE - 1; j++) {
 			// Strength reduction
@@ -132,16 +113,17 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 			
 			sum_input += (out_row[j] = (res > 255) ? 255 : (unsigned char)res);
 		}
+		dec_i_times_SIZE += SIZE;
+		inc_i_times_SIZE += SIZE;
+		i_times_SIZE += SIZE;
 	}
 
-	#pragma omp parallel for reduction(+:sum_golden)
 	for (int i = 1; i < SIZE - 1; i++) {
 		const unsigned char *row = &golden[i * SIZE + 1];
 		for (int j = 0; j < SIZE - 2; j++) sum_golden += row[j];
 	}
 
 	PSNR = sum_input * sum_input - (sum_input << 1) * sum_golden + sum_golden * sum_golden;
-  
   
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);
@@ -172,3 +154,4 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
+

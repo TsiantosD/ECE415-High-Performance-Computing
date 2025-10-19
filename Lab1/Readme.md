@@ -62,3 +62,7 @@ python3 average.py
 - Remove `pow(..., 2)` function calls and replace with the multiplication of the results
 - Increment `i_times_SIZE` at the end of the loop instead of multiplying
 - TODO: do binary AND between 256 and `res` instead of comparison
+
+### 10) Referencing
+- Reference offset arrays to eliminate redundant operations `input[offset + i]` becomes `ofst_input = &input[offset]` and is then indexed: `ofst_input[i]`
+- Perform strength reduction on indexing operations and incrementing variables
