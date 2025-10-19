@@ -128,7 +128,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 		}
 	}
 
-	PSNR = sum_input - 2 * second_term + sum_golden;
+	PSNR = sum_input - (second_term << 1) + sum_golden;
   
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);
