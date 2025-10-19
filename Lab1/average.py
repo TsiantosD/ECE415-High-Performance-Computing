@@ -53,6 +53,9 @@ avg_col_width = 12
 stdev_col_width = 12
 
 for (size, opt, method, _) in sorted({(s, o, m, '') for (s, o, m, _) in runtimes}):
+    if method != "normal":
+        continue
+
     print(f"\n## 📊 Results for {size} | {opt} | {method}\n")
     print(f"| {'Executable':<{exe_col_width}} | {'#Runs':>{runs_col_width}} | {'Average (s)':>{avg_col_width}} | {'Std Dev (s)':>{stdev_col_width}} | Min / Max outliers  |")
     print(f"| {'-'*exe_col_width} | {'-'*runs_col_width} | {'-'*avg_col_width} | {'-'*stdev_col_width} | ------------------- |")
