@@ -60,7 +60,7 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0, t;
-	int i, j, horiz_conv, vert_conv, out_minus_gold;
+	int i, j, horiz_conv, vert_conv, out_minus_gold, input_index = 0;
 	unsigned int p;
 	int res;
 	struct timespec  tv1, tv2;
@@ -107,32 +107,32 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 	/* For each pixel of the output image */
-	for (i=1; i<SIZE-1; i+=1) {
-		for (j=1; j<SIZE-1; j+=1) {
+	for (i=1; i<SIZE-1; i+=1, input_index += SIZE) {
+		for (j=1; j<SIZE-1; j+=1, input_index += 1) {
 			/* Apply the sobel filter and calculate the magnitude *
 			 * of the derivative.								  */
 			horiz_conv = 0;
-			horiz_conv += input[(i-1) * SIZE + j - 1] * horiz_operator[0][0];
-			horiz_conv += input[(i-1) * SIZE + j] * horiz_operator[0][1];
-			horiz_conv += input[(i-1) * SIZE + j + 1] * horiz_operator[0][2];
-			horiz_conv += input[(i-1) * SIZE + j - 1 + SIZE] * horiz_operator[1][0];
-			horiz_conv += input[(i-1) * SIZE + j + SIZE] * horiz_operator[1][1];
-			horiz_conv += input[(i-1) * SIZE + j + SIZE + 1] * horiz_operator[1][2];
-			horiz_conv += input[(i-1) * SIZE + j - 1 + SIZE + SIZE] * horiz_operator[2][0];
-			horiz_conv += input[(i-1) * SIZE + j + SIZE + SIZE] * horiz_operator[2][1];
-			horiz_conv += input[(i-1) * SIZE + j + SIZE + SIZE + 1] * horiz_operator[2][2];
+			horiz_conv += input[input_index - 1] * horiz_operator[0][0];
+			horiz_conv += input[input_index] * horiz_operator[0][1];
+			horiz_conv += input[input_index + 1] * horiz_operator[0][2];
+			horiz_conv += input[input_index - 1 + SIZE] * horiz_operator[1][0];
+			horiz_conv += input[input_index + SIZE] * horiz_operator[1][1];
+			horiz_conv += input[input_index + SIZE + 1] * horiz_operator[1][2];
+			horiz_conv += input[input_index - 1 + SIZE + SIZE] * horiz_operator[2][0];
+			horiz_conv += input[input_index + SIZE + SIZE] * horiz_operator[2][1];
+			horiz_conv += input[input_index + SIZE + SIZE + 1] * horiz_operator[2][2];
 
 			vert_conv = 0;
-			vert_conv += input[(i-1) * SIZE + j - 1] * vert_operator[0][0];
-			vert_conv += input[(i-1) * SIZE + j] * vert_operator[0][1];
-			vert_conv += input[(i-1) * SIZE + j + 1] * vert_operator[0][2];
-			vert_conv += input[(i-1) * SIZE + j - 1 + SIZE] * vert_operator[1][0];
-			vert_conv += input[(i-1) * SIZE + j + SIZE] * vert_operator[1][1];
-			vert_conv += input[(i-1) * SIZE + j + SIZE + 1] * vert_operator[1][2];
-			vert_conv += input[(i-1) * SIZE + j - 1 + SIZE + SIZE] * vert_operator[2][0];
-			vert_conv += input[(i-1) * SIZE + j + SIZE + SIZE] * vert_operator[2][1];
-			vert_conv += input[(i-1) * SIZE + j + SIZE + SIZE + 1] * vert_operator[2][2];
-			
+			vert_conv += input[input_index - 1] * vert_operator[0][0];
+			vert_conv += input[input_index] * vert_operator[0][1];
+			vert_conv += input[input_index + 1] * vert_operator[0][2];
+			vert_conv += input[input_index - 1 + SIZE] * vert_operator[1][0];
+			vert_conv += input[input_index + SIZE] * vert_operator[1][1];
+			vert_conv += input[input_index + SIZE + 1] * vert_operator[1][2];
+			vert_conv += input[input_index - 1 + SIZE + SIZE] * vert_operator[2][0];
+			vert_conv += input[input_index + SIZE + SIZE] * vert_operator[2][1];
+			vert_conv += input[input_index + SIZE + SIZE + 1] * vert_operator[2][2];
+
 			p = horiz_conv * horiz_conv + vert_conv * vert_conv;
 			res = (int)sqrt(p);
 

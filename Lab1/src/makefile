@@ -9,7 +9,8 @@ IMAGE_NAME ?= timescapes
 EXECUTABLES	= 01_sobel_orig 02_sobel_loop_interchange \
 03_sobel_pow_reduction 04_sobel_index_reduction 05_sobel_ternary_op \
 06_sobel_loop_fusion 07_sobel_loop_unroll_conv 08_sobel_f7_r4_5_6 \
-09_sobel_f7_r4_5 10_sobel_f7_r4_6 11_sobel_f7_r6 12_sobel_f8_inline_conv
+09_sobel_f7_r4_5 10_sobel_f7_r4_6 11_sobel_f7_r6 12_sobel_f8_inline_conv \
+13_sobel_subexpr_main_loop
 
 #This is the compiler to use
 CC = icx
