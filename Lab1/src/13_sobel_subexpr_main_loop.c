@@ -60,7 +60,7 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0, t;
-	int i, j, horiz_conv, vert_conv, out_minus_gold, input_index = 0;
+	int i, j, horiz_conv, vert_conv, out_minus_gold, input_index = 1;
 	unsigned int p;
 	int res;
 	struct timespec  tv1, tv2;
@@ -107,7 +107,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 	/* For each pixel of the output image */
-	for (i=1; i<SIZE-1; i+=1, input_index += SIZE) {
+	for (i=1; i<SIZE-1; i+=1, input_index += 2) {
 		for (j=1; j<SIZE-1; j+=1, input_index += 1) {
 			/* Apply the sobel filter and calculate the magnitude *
 			 * of the derivative.								  */
