@@ -16,7 +16,8 @@ EXECUTABLES	= 01_sobel_orig \
 			  07_sobel_strength_reduction \
 			  08_sobel_openmp \
 			  09_sobel_convolution_minimize \
-			  10_sobel_referencing
+			  10_sobel_referencing \
+			  10_sobel_fast_sqrt
 
 #This is the compiler to use
 CC = icx
