@@ -7,15 +7,15 @@ IMAGE_NAME ?= timescapes
 OPT_LEVEL ?= O0
 
 #Add any executable you want to be created here.
-EXECUTABLES	= 1_sobel_orig \
-			  2_sobel_loop_interchange \
-			  3_sobel_loop_unrolling \
-			  4_sobel_loop_fusion \
-			  5_sobel_function_inlining \
- 			  6_sobel_common_subexpression_elimination \
-			  7_sobel_strength_reduction \
-			  8_sobel_openmp \
-			  9_sobel_convolution_minimize \
+EXECUTABLES	= 01_sobel_orig \
+			  02_sobel_loop_interchange \
+			  03_sobel_loop_unrolling \
+			  04_sobel_loop_fusion \
+			  05_sobel_function_inlining \
+ 			  06_sobel_common_subexpression_elimination \
+			  07_sobel_strength_reduction \
+			  08_sobel_openmp \
+			  09_sobel_convolution_minimize \
 			  10_sobel_referencing
 
 #This is the compiler to use
