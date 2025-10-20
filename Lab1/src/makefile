@@ -13,6 +13,7 @@ EXECUTABLES	= 01_sobel_orig \
 			  04_sobel_fast_psnr \
 			  05_sobel_fast_min \
 			  06_sobel_fast_sqrt \
+			  07_sobel_fast_conv_sqrt
 
 #This is the compiler to use
 CC = icx
