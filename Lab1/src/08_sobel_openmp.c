@@ -7,6 +7,7 @@
 #include <time.h>
 #include <errno.h>
 #include <omp.h>
+#include <limits.h>
 
 #ifndef SIZE
 #warning "SIZE not defined! Using default 4096."
@@ -61,7 +62,8 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0, t;
-	int i, j, i_times_SIZE_plus_j;
+	int i, j, i_times_SIZE_plus_j, sqrt;
+	float square_sum;
 	int res;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
@@ -112,7 +114,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 
 	#pragma omp parallel for \
-	private(j, res, i_times_SIZE_plus_j, t, pixel_horizontal, pixel_vertical) \
+	private(j, res, i_times_SIZE_plus_j, t, pixel_horizontal, pixel_vertical, sqrt, square_sum) \
 	reduction(+:sum_input)
 	for (i = 1; i < SIZE - 1; i++) {
 		// Referencing
@@ -128,8 +130,16 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 			pixel_horizontal += -(mid_row[j - 1] << 1) + (mid_row[j + 1] << 1)  + -bottom_row[j - 1]+ bottom_row[j + 1];
 			pixel_vertical += -bottom_row[j - 1] + -(bottom_row[j] << 1) + -bottom_row[j + 1];
 			
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			temp_out = (out_row[j] = (res > 255) ? 255 : (unsigned char)res);
+			square_sum = pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical;
+			sqrt = * ( int * ) &square_sum;
+			sqrt = (sqrt >> 1) + 0x1FBD3F7D;
+			res = (int) (* ( float * ) &sqrt);
+
+			// find the min between res and 255
+			int diff = res - 255;
+			temp_out = 255 + ((diff) & ((diff) >> (sizeof(int) * CHAR_BIT - 1)));
+
+			out_row[j] = temp_out;
 			sum_input += temp_out * temp_out;
 		}
 	}
