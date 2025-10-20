@@ -102,6 +102,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 		const unsigned char *mid_row = &input[i_times_SIZE];
 
 		for (j=1; j<SIZE-1; j++) {
+			i_times_SIZE_plus_j = i*SIZE + j;
 			pixel_horizontal = - top_row[j - 1] + top_row[j + 1];
 			pixel_vertical = top_row[j - 1] + (top_row[j] << 1) + top_row[j + 1];
 			pixel_horizontal += - (mid_row[j - 1] << 1) + (mid_row[j + 1] << 1) - bottom_row[j - 1] + bottom_row[j + 1];
@@ -111,9 +112,9 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 			/* If the resulting value is greater than 255, clip it *
 			 * to 255.											   */
 			if (res > 255)
-				output[i*SIZE + j] = 255;      
+				output[i_times_SIZE_plus_j] = 255;      
 			else
-				output[i*SIZE + j] = (unsigned char)res;
+				output[i_times_SIZE_plus_j] = (unsigned char)res;
 		}
 		dec_i_times_SIZE += SIZE;
 		inc_i_times_SIZE += SIZE;
