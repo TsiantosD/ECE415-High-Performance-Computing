@@ -27,6 +27,8 @@
 #define GOLDEN_FILE "golden/timescapes.grey"
 #endif
 
+/* The horizontal and vertical operators to be used in the sobel filter */
+
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden);
 
 /* The arrays holding the input image, the output image and the output used *
@@ -36,7 +38,6 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
  * order (element after element within each row and row after row. 			*/
 unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 
-
 /* The main computational function of the program. The input, output and *
  * golden arguments are pointers to the arrays used to store the input   *
  * image, the output produced by the algorithm and the output used as    *
@@ -44,11 +45,11 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0;
-	int i, j, pixel_horizontal, pixel_vertical;
-	int res;
+	unsigned long long sum_input = 0, sum_golden = 0, temp_out = 0, second_term = 0;
+	int i, j, i_times_SIZE, res;
+	unsigned int pixel_horizontal, pixel_vertical;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
-	unsigned long long sum_input = 0, sum_golden = 0, temp_out = 0, second_term = 0;
 
 	/* The first and last row of the output array, as well as the first  *
      * and last element of each column are not going to be filled by the *
@@ -88,58 +89,50 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	fclose(f_in);
 	fclose(f_golden);
   
-	int i_times_SIZE = SIZE;
-	int i_times_SIZE_plus_j = 0;
-	int inc_i_times_SIZE = SIZE << 1;
-	int dec_i_times_SIZE = 0;
-
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 
-	/* For each pixel of the output image */
-	for (i=1; i<SIZE-1; i++ ) {
+	i_times_SIZE = SIZE;
+	int inc_i_times_SIZE = SIZE << 1;
+	int dec_i_times_SIZE = 0;
+
+	for (i = 1; i < SIZE - 1; i++) {
+		// Referencing
 		const unsigned char *top_row = &input[dec_i_times_SIZE];
 		const unsigned char *bottom_row = &input[inc_i_times_SIZE];
 		const unsigned char *mid_row = &input[i_times_SIZE];
-
-		for (j=1; j<SIZE-1; j++) {
-			i_times_SIZE_plus_j = i * SIZE + j;
-
-			pixel_horizontal = - top_row[j - 1] + top_row[j + 1];
+		unsigned char *out_row = &output[i_times_SIZE];
+		
+		for (j = 1; j < SIZE - 1; j++) {
+			pixel_horizontal = -top_row[j - 1] + top_row[j + 1];
 			pixel_vertical = top_row[j - 1] + (top_row[j] << 1) + top_row[j + 1];
-			pixel_horizontal += - (mid_row[j - 1] << 1) + (mid_row[j + 1] << 1) - bottom_row[j - 1] + bottom_row[j + 1];
-			pixel_vertical += - bottom_row[j - 1] - (bottom_row[j] << 1) - bottom_row[j + 1];
+			pixel_horizontal += -(mid_row[j - 1] << 1) + (mid_row[j + 1] << 1) - bottom_row[j - 1] + bottom_row[j + 1];
+			pixel_vertical += -bottom_row[j - 1] - (bottom_row[j] << 1) - bottom_row[j + 1];
+			
+			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
 
-			res = (int)sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			/* If the resulting value is greater than 255, clip it *
-			 * to 255.											   */
-			if (res > 255)
-				output[i_times_SIZE_plus_j] = 255;      
-			else
-				output[i_times_SIZE_plus_j] = (unsigned char)res;
-
-			sum_input += output[i_times_SIZE_plus_j] * output[i_times_SIZE_plus_j];
+			temp_out = (out_row[j] = (res > 255) ? 255 : (unsigned char) res);
+			sum_input += temp_out * temp_out;
 		}
 		dec_i_times_SIZE += SIZE;
 		inc_i_times_SIZE += SIZE;
 		i_times_SIZE += SIZE;
 	}
 
-	/* Now run through the output and the golden output to calculate *
-	 * the MSE and then the PSNR.									 */
-	for (i=1; i < SIZE-1; i++) {
-		inc_i_times_SIZE = i * SIZE + 1;
-		const unsigned char *gold_row = &golden[inc_i_times_SIZE];
-		const unsigned char *out_row = &output[inc_i_times_SIZE];
-		for (j=0; j < SIZE-2; j++) {
+	i_times_SIZE = 1;
+	for (i = 1; i < SIZE - 1; i++) {
+		const unsigned char *gold_row = &golden[i_times_SIZE];
+		const unsigned char *out_row = &output[i_times_SIZE];
+		for (j = 0; j < SIZE - 2; j++) {
 			temp_out = gold_row[j];
 			sum_golden += temp_out * temp_out;
 			second_term += temp_out * out_row[j];
 		}
+		i_times_SIZE += SIZE;
 	}
 
-  	PSNR = sum_input - (second_term << 1) + sum_golden;
-
+	PSNR = sum_input - (second_term << 1) + sum_golden;
+  
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);
 

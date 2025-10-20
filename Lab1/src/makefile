@@ -8,7 +8,7 @@ OPT_LEVEL ?= O0
 
 #Add any executable you want to be created here.
 EXECUTABLES	= 01_sobel_orig \
-			  02_sobel_loop_interchange \
+			  02_sobel_base_optimizations \
 			  03_sobel_fast_convolution \
 			  04_sobel_fast_psnr \
 			  05_sobel_fast_min \
