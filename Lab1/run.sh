@@ -132,9 +132,10 @@ if [ ${#EXES[@]} -eq 0 ]; then
 fi
 
 # --- Execution methods ---
-METHODS=("normal" "hpc-performance" "memory-access" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access")
-METHOD_FLAGS=("" "hpc-performance" "memory-access" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access")
-METHOD_NAMES=("Normal run" "VTune - HPC Performance" "VTune - Memory Access" "VTune - Hotspots" "VTune - Performance Snapshot" "VTune - Microarchitecture Exploration" "VTune - Memory Access")
+# --- Execution methods ---
+METHODS=("normal" "hpc-performance" "memory-access" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access" "perf")
+METHOD_FLAGS=("" "hpc-performance" "memory-access" "hotspots" "performance-snapshot" "uarch-exploration" "memory-access" "")
+METHOD_NAMES=("Normal run" "VTune - HPC Performance" "VTune - Memory Access" "VTune - Hotspots" "VTune - Performance Snapshot" "VTune - Microarchitecture Exploration" "VTune - Memory Access" "Perf stat")
 
 # --- Determine selected methods ---
 if [[ -n "$EXEC_METHOD" ]]; then
@@ -221,7 +222,6 @@ run_and_diff() {
     local timestamp
     timestamp=$(date +"%Y%m%d_%H%M%S")
 
-    # Folder hierarchy: metrics/<SIZE>/<OPTIMIZATION>/<METHOD>/<timestamp>_<exe_name>
     local metrics_dir="../metrics/${SIZE}/${OPTIMIZATION}/${method}/${timestamp}_${exe_name}"
     mkdir -p "$metrics_dir"
 
@@ -229,21 +229,12 @@ run_and_diff() {
         local log_file="$metrics_dir/${exe_name}_run${run}.log"
         echo "> [${run}/${RUN_TIMES}] Running $exe_name | Method: $method | Opt: $OPTIMIZATION | Size: $SIZE ..."
 
-        # Run based on method and whether it's an OpenMP executable
-        if [[ "$exe_name" == *openmp* ]]; then
-            # Run normally without taskset
-            if [ "$method" = "normal" ]; then
-                "./$exe_name" > "$log_file" 2>&1
-            else
-                vtune -collect "$method_flag" -result-dir "$metrics_dir/run_${run}" -- "./$exe_name" > "$log_file" 2>&1
-            fi
+        if [[ "$method" == "normal" ]]; then
+            taskset -c "$CPU_CORE" "./$exe_name" > "$log_file" 2>&1
+        elif [[ "$method" == "perf" ]]; then
+            taskset -c "$CPU_CORE" perf stat -e cpu-cycles,instructions,cache-references,cache-misses,branch-instructions,branch-misses "./$exe_name" > "$log_file" 2>&1
         else
-            # Run pinned to a specific CPU core
-            if [ "$method" = "normal" ]; then
-                taskset -c "$CPU_CORE" "./$exe_name" > "$log_file" 2>&1
-            else
-                taskset -c "$CPU_CORE" vtune -collect "$method_flag" -result-dir "$metrics_dir/run_${run}" -- "./$exe_name" > "$log_file" 2>&1
-            fi
+            taskset -c "$CPU_CORE" vtune -collect "$method_flag" -result-dir "$metrics_dir/run_${run}" -- "./$exe_name" > "$log_file" 2>&1
         fi
 
         echo "> Comparing output.grey with golden.grey ..."
