@@ -51,14 +51,15 @@ exe_col_width = 50
 runs_col_width = 6
 avg_col_width = 12
 stdev_col_width = 12
+speedup_col_width = 10
 
 for (size, opt, method, _) in sorted({(s, o, m, '') for (s, o, m, _) in runtimes}):
     if method != "normal":
         continue
 
     print(f"\n## 📊 Results for {size} | {opt} | {method}\n")
-    print(f"| {'Executable':<{exe_col_width}} | {'#Runs':>{runs_col_width}} | {'Average (s)':>{avg_col_width}} | {'Std Dev (s)':>{stdev_col_width}} | Min / Max outliers  |")
-    print(f"| {'-'*exe_col_width} | {'-'*runs_col_width} | {'-'*avg_col_width} | {'-'*stdev_col_width} | ------------------- |")
+    print(f"| {'Executable':<{exe_col_width}} | {'#Runs':>{runs_col_width}} | {'Average (s)':>{avg_col_width}} | {'Std Dev (s)':>{stdev_col_width}} | {'Speedup':>{speedup_col_width}}  | Min / Max outliers  |")
+    print(f"| {'-'*exe_col_width} | {'-'*runs_col_width} | {'-'*avg_col_width} | {'-'*stdev_col_width} | {'-'*speedup_col_width}- | ------------------- |")
 
     stats = []
     for (s, o, m, exe_name), times in sorted(runtimes.items()):
@@ -78,23 +79,27 @@ for (size, opt, method, _) in sorted({(s, o, m, '') for (s, o, m, _) in runtimes
 
         avg = statistics.mean(filtered)
         stdev = statistics.stdev(filtered) if len(filtered) > 1 else 0.0
+        stats.append((exe_name, avg, stdev, n, min_outlier, max_outlier))
 
+    # --- Compute reference average (first version) ---
+    if not stats:
+        continue
+    ref_avg = stats[0][1]
+
+    # --- Print table rows ---
+    for exe_name, avg, stdev, n, min_outlier, max_outlier in stats:
+        speedup = ref_avg / avg if avg > 0 else 0.0
         min_str = f"{min_outlier:.6f}" if isinstance(min_outlier, float) else min_outlier
         max_str = f"{max_outlier:.6f}" if isinstance(max_outlier, float) else max_outlier
 
-        print(f"| {exe_name:<{exe_col_width}} | {n:>{runs_col_width}} | {avg:>{avg_col_width}.5f} | {stdev:>{stdev_col_width}.5f} | {min_str} / {max_str} |")
-        stats.append((exe_name, avg, stdev))
+        print(f"| {exe_name:<{exe_col_width}} | {n:>{runs_col_width}} | {avg:>{avg_col_width}.5f} | {stdev:>{stdev_col_width}.5f} | {speedup:>{speedup_col_width}.2f}× | {min_str} / {max_str} |")
 
     # --- Plot ---
-    if not stats:
-        continue
-
     labels = [s[0] for s in stats]
     averages = [s[1] for s in stats]
     stdevs = [s[2] for s in stats]
 
     fig, ax = plt.subplots(figsize=(10, max(3, len(labels) * 0.6)))
-
     y_pos = range(len(labels))
 
     bars = ax.barh(y_pos, averages, color="#0096FF", edgecolor="white", height=0.6, label="Average runtime")
@@ -110,11 +115,10 @@ for (size, opt, method, _) in sorted({(s, o, m, '') for (s, o, m, _) in runtimes
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels)
     ax.set_xlabel("Time (seconds)")
-    ax.set_title(f"Average Runtime — {size}x{size} (-{opt}) ")
+    ax.set_title(f"Average Runtime — {size}x{size} (-{opt})")
     ax.legend()
     plt.tight_layout()
 
-    # Save one plot per combination
     os.makedirs("plots", exist_ok=True)
     plt.savefig(f"plots/average_{size}_{opt}_{method}.png", dpi=300)
     plt.close(fig)

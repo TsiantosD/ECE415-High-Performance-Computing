@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <errno.h>
+#include <limits.h>
 
 #ifndef SIZE
 #warning "SIZE not defined! Using default 4096."
@@ -29,18 +30,13 @@
 
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden);
 
-int fast_sqrt(float a) {
-    int i = * ( int * ) &a;
-    i = (i >> 1) + 0x1FBD3F7D;
-    return (int) (* ( float * ) &i);
-}
-
 /* The arrays holding the input image, the output image and the output used *
  * as golden standard. The luminosity (intensity) of each pixel in the      *
  * grayscale image is represented by a value between 0 and 255 (an unsigned *
  * character). The arrays (and the files) contain these values in row-major *
  * order (element after element within each row and row after row. 			*/
 unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
+
 
 /* The main computational function of the program. The input, output and *
  * golden arguments are pointers to the arrays used to store the input   *
@@ -49,12 +45,11 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0;
-	float square_sum;
-	unsigned long long sum_input = 0, sum_golden = 0, temp_out = 0, second_term = 0;
-	int i, j, i_times_SIZE, res, sqrt;
-	unsigned int pixel_horizontal, pixel_vertical;
+	int i, j, pixel_horizontal, pixel_vertical;
+	int res, diff;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
+	unsigned long long sum_input = 0, sum_golden = 0, temp_out = 0, second_term = 0;
 
 	/* The first and last row of the output array, as well as the first  *
      * and last element of each column are not going to be filled by the *
@@ -94,33 +89,32 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	fclose(f_in);
 	fclose(f_golden);
   
-	/* This is the main computation. Get the starting time. */
-	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
-
-	i_times_SIZE = SIZE;
+	int i_times_SIZE = SIZE;
 	int inc_i_times_SIZE = SIZE << 1;
 	int dec_i_times_SIZE = 0;
 
-	for (i = 1; i < SIZE - 1; i++) {
-		// Referencing
+	/* This is the main computation. Get the starting time. */
+	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
+
+	/* For each pixel of the output image */
+	for (i=1; i<SIZE-1; i++ ) {
 		const unsigned char *top_row = &input[dec_i_times_SIZE];
 		const unsigned char *bottom_row = &input[inc_i_times_SIZE];
 		const unsigned char *mid_row = &input[i_times_SIZE];
-		unsigned char *out_row = &output[i_times_SIZE];
-		
-		for (j = 1; j < SIZE - 1; j++) {
-			// Strength reduction
-			pixel_horizontal = -top_row[j - 1] + top_row[j + 1];
-			pixel_vertical = top_row[j - 1] + (top_row[j] << 1) + top_row[j + 1];
-			pixel_horizontal += -(mid_row[j - 1] << 1) + (mid_row[j + 1] << 1)  + -bottom_row[j - 1]+ bottom_row[j + 1];
-			pixel_vertical += -bottom_row[j - 1] + -(bottom_row[j] << 1) + -bottom_row[j + 1];
-			
-			square_sum = pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical;
-			sqrt = * ( int * ) &square_sum;
-			sqrt = (sqrt >> 1) + 0x1FBD3F7D;
-			res = (int) (* ( float * ) &sqrt);
 
-			temp_out = (out_row[j] = (res > 255) ? 255 : (unsigned char) res);
+		for (j=1; j<SIZE-1; j++) {
+			pixel_horizontal = - top_row[j - 1] + top_row[j + 1];
+			pixel_vertical = top_row[j - 1] + (top_row[j] << 1) + top_row[j + 1];
+			pixel_horizontal += - (mid_row[j - 1] << 1) + (mid_row[j + 1] << 1) - bottom_row[j - 1] + bottom_row[j + 1];
+			pixel_vertical += - bottom_row[j - 1] - (bottom_row[j] << 1) - bottom_row[j + 1];
+
+			res = (int)sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+			/* If the resulting value is greater than 255, clip it *
+			 * to 255.											   */
+			diff = res - 255;
+			temp_out = 255 + ((diff) & ((diff) >> (sizeof(int) * CHAR_BIT - 1)));
+
+			output[i_times_SIZE + j] = temp_out;
 			sum_input += temp_out * temp_out;
 		}
 		dec_i_times_SIZE += SIZE;
@@ -128,18 +122,21 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 		i_times_SIZE += SIZE;
 	}
 
-	for (int i = 1; i < SIZE - 1; i++) {
-		const unsigned char *gold_row = &golden[i * SIZE + 1];
-		const unsigned char *out_row = &output[i * SIZE + 1];
-		for (int j = 0; j < SIZE - 2; j++) {
+	/* Now run through the output and the golden output to calculate *
+	 * the MSE and then the PSNR.									 */
+	for (i=1; i < SIZE-1; i++) {
+		inc_i_times_SIZE = i * SIZE + 1;
+		const unsigned char *gold_row = &golden[inc_i_times_SIZE];
+		const unsigned char *out_row = &output[inc_i_times_SIZE];
+		for (j=0; j < SIZE-2; j++) {
 			temp_out = gold_row[j];
 			sum_golden += temp_out * temp_out;
 			second_term += temp_out * out_row[j];
 		}
 	}
 
-	PSNR = sum_input - (second_term << 1) + sum_golden;
-  
+  	PSNR = sum_input - (second_term << 1) + sum_golden;
+
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);
 

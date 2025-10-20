@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <errno.h>
-#include <omp.h>
 
 #ifndef SIZE
 #warning "SIZE not defined! Using default 4096."
@@ -28,14 +27,6 @@
 #define GOLDEN_FILE "golden/timescapes.grey"
 #endif
 
-/* The horizontal and vertical operators to be used in the sobel filter */
-char horiz_operator[3][3] = {{-1, 0, 1}, 
-                             {-2, 0, 2}, 
-                             {-1, 0, 1}};
-char vert_operator[3][3] = {{1, 2, 1}, 
-                            {0, 0, 0}, 
-                            {-1, -2, -1}};
-
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden);
 
 /* The arrays holding the input image, the output image and the output used *
@@ -46,14 +37,6 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 
 
-/* Implement a 2D convolution of the matrix with the operator */
-/* posy and posx correspond to the vertical and horizontal disposition of the *
- * pixel we process in the original image, input is the input image and       *
- * operator the operator we apply (horizontal or vertical). The function ret. *
- * value is the convolution of the operator with the neighboring pixels of the*
- * pixel we process.														  */
-
-
 /* The main computational function of the program. The input, output and *
  * golden arguments are pointers to the arrays used to store the input   *
  * image, the output produced by the algorithm and the output used as    *
@@ -61,15 +44,11 @@ unsigned char input[SIZE*SIZE], output[SIZE*SIZE], golden[SIZE*SIZE];
 double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 {
 	double PSNR = 0, t;
-	int i, j, i_times_SIZE_plus_j;
+	int i, j, pixel_horizontal, pixel_vertical;
 	int res;
 	struct timespec  tv1, tv2;
 	FILE *f_in, *f_out, *f_golden;
-	unsigned int pixel_horizontal, pixel_vertical;
-	unsigned long long sum_input = 0, sum_golden = 0, temp_out = 0, second_term = 0;
 
-
-	
 	/* The first and last row of the output array, as well as the first  *
      * and last element of each column are not going to be filled by the *
      * algorithm, therefore make sure to initialize them with 0s.		 */
@@ -108,44 +87,48 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 	fclose(f_in);
 	fclose(f_golden);
   
+	int i_times_SIZE = SIZE;
+	int i_times_SIZE_plus_j = 0;
+	int inc_i_times_SIZE = SIZE << 1;
+	int dec_i_times_SIZE = 0;
+
 	/* This is the main computation. Get the starting time. */
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
 
-	#pragma omp parallel for \
-	private(j, res, i_times_SIZE_plus_j, t, pixel_horizontal, pixel_vertical) \
-	reduction(+:sum_input)
-	for (i = 1; i < SIZE - 1; i++) {
-		// Referencing
-		const unsigned char *top_row = &input[(i - 1) * SIZE];
-		const unsigned char *bottom_row = &input[(i + 1) * SIZE];
-		const unsigned char *mid_row = &input[i * SIZE];
-		unsigned char *out_row = &output[i * SIZE];
-		
-		for (j = 1; j < SIZE - 1; j++) {
-			// Strength reduction
-			pixel_horizontal = -top_row[j - 1] + top_row[j + 1];
+	/* For each pixel of the output image */
+	for (i=1; i<SIZE-1; i++ ) {
+		const unsigned char *top_row = &input[dec_i_times_SIZE];
+		const unsigned char *bottom_row = &input[inc_i_times_SIZE];
+		const unsigned char *mid_row = &input[i_times_SIZE];
+
+		for (j=1; j<SIZE-1; j++) {
+			pixel_horizontal = - top_row[j - 1] + top_row[j + 1];
 			pixel_vertical = top_row[j - 1] + (top_row[j] << 1) + top_row[j + 1];
-			pixel_horizontal += -(mid_row[j - 1] << 1) + (mid_row[j + 1] << 1)  + -bottom_row[j - 1]+ bottom_row[j + 1];
-			pixel_vertical += -bottom_row[j - 1] + -(bottom_row[j] << 1) + -bottom_row[j + 1];
-			
-			res = sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
-			temp_out = (out_row[j] = (res > 255) ? 255 : (unsigned char)res);
-			sum_input += temp_out * temp_out;
+			pixel_horizontal += - (mid_row[j - 1] << 1) + (mid_row[j + 1] << 1) - bottom_row[j - 1] + bottom_row[j + 1];
+			pixel_vertical += - bottom_row[j - 1] - (bottom_row[j] << 1) - bottom_row[j + 1];
+
+			res = (int)sqrt(pixel_horizontal * pixel_horizontal + pixel_vertical * pixel_vertical);
+			/* If the resulting value is greater than 255, clip it *
+			 * to 255.											   */
+			if (res > 255)
+				output[i*SIZE + j] = 255;      
+			else
+				output[i*SIZE + j] = (unsigned char)res;
 		}
+		dec_i_times_SIZE += SIZE;
+		inc_i_times_SIZE += SIZE;
+		i_times_SIZE += SIZE;
 	}
 
-	#pragma omp parallel for reduction(+:sum_golden, second_term)
-	for (int i = 1; i < SIZE - 1; i++) {
-		const unsigned char *gold_row = &golden[i * SIZE + 1];
-		const unsigned char *out_row = &output[i * SIZE + 1];
-		for (int j = 0; j < SIZE - 2; j++) {
-			temp_out = gold_row[j];
-			sum_golden += temp_out * temp_out;
-			second_term += temp_out * out_row[j];
+	/* Now run through the output and the golden output to calculate *
+	 * the MSE and then the PSNR.									 */
+	for (i=1; i<SIZE-1; i++) {
+		for ( j=1; j<SIZE-1; j++ ) {
+			i_times_SIZE_plus_j = i*SIZE+j;
+			t = pow((output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]),2);
+			PSNR += t;
 		}
 	}
-
-	PSNR = sum_input - (second_term << 1) + sum_golden;
   
 	PSNR /= (double)(SIZE*SIZE);
 	PSNR = 10*log10(65536/PSNR);
@@ -176,3 +159,4 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
+
