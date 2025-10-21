@@ -21,10 +21,16 @@ EXECUTABLES	= 01_sobel_orig \
 CC = icx
 
 #These are the flags passed to the compiler. Change accordingly
-CFLAGS = -Wall -$(OPT_LEVEL) -qopenmp -g -DSIZE=$(SIZE) \
+CFLAGS = -Wall -qopenmp -g -DSIZE=$(SIZE) \
 					  -DINPUT_FILE=\"input/$(SIZE)-$(IMAGE_NAME).grey\" \
 					  -DOUTPUT_FILE=\"output/$(IMAGE_NAME).grey\" \
 					  -DGOLDEN_FILE=\"golden/$(IMAGE_NAME).grey\"
+
+ifeq ($(OPT_LEVEL),fast)
+    CFLAGS += -Ofast
+else
+    CFLAGS += -$(OPT_LEVEL)
+endif
 
 #These are the flags passed to the linker. Nothing in our case
 LDFLAGS = -lm

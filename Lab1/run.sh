@@ -25,7 +25,7 @@ print_help() {
     echo "  --image=<filename>              Choose input image from ./src/input (e.g. 4096-timescapes.grey)"
     echo "  --times=<N>                     Run each executable N times (default: 1)"
     echo "  --calculate-average=<boolean>   Run the average.py script to calculate the average of all saved runs"
-    echo "  --optimization=<O0|O1|O2|O3>    Choose compiler optimizations. Default: O0"
+    echo "  --optimization=<O0|O1|O2|O3|fast>    Choose compiler optimizations. Default: O0"
     echo "                                  Options: true, false"
     echo
     exit 0
@@ -53,9 +53,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --optimization=*)
             OPTIMIZATION="${1#*=}"
-            if [[ ! "$OPTIMIZATION" =~ ^O[0-3]$ ]]; then
+            if [[ ! "$OPTIMIZATION" =~ ^O[0-3]$ && "$OPTIMIZATION" != "fast" ]]; then
                 echo "Invalid optimization level: $OPTIMIZATION"
-                echo "Valid options: O0, O1, O2, O3"
+                echo "Valid options: O0, O1, O2, O3, fast"
                 exit 1
             fi
             ;;
