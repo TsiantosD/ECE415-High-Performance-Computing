@@ -131,7 +131,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 			i_times_SIZE_plus_j = i_times_SIZE + j;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
-			PSNR += t * t;
+			PSNR += pow(t, 2);
 
 			// pixel (i, j+1)
 			p = pow(CONVOLUTION2D(i, j+1, input, horiz_operator), 2) +
@@ -140,7 +140,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 			i_times_SIZE_plus_j++;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
-			PSNR += t * t;
+			PSNR += pow(t, 2);
 
 			// pixel (i, j+2)
 			p = pow(CONVOLUTION2D(i, j+2, input, horiz_operator), 2) +
@@ -149,7 +149,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 			i_times_SIZE_plus_j++;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
-			PSNR += t * t;
+			PSNR += pow(t, 2);
 
 			// pixel (i, j+3)
 			p = pow(CONVOLUTION2D(i, j+3, input, horiz_operator), 2) +
@@ -158,7 +158,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 			i_times_SIZE_plus_j++;
 			output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 			t = (output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j]);
-			PSNR += t * t;
+			PSNR += pow(t, 2);
 		}
 
 		/* handle leftover columns */
@@ -171,7 +171,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 				i_times_SIZE_plus_j = i_times_SIZE + j;
 				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];
-				PSNR += t * t;
+				PSNR += pow(t, 2);
 				j++;
 
 			case 2:
@@ -181,7 +181,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 				i_times_SIZE_plus_j = i_times_SIZE + j;
 				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];
-				PSNR += t * t;
+				PSNR += pow(t, 2);
 				j++;
 
 			case 1:
@@ -191,7 +191,7 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 				i_times_SIZE_plus_j = i_times_SIZE + j;
 				output[i_times_SIZE_plus_j] = (res > 255) ? 255 : (unsigned char)res;
 				t = output[i_times_SIZE_plus_j] - golden[i_times_SIZE_plus_j];
-				PSNR += t * t;
+				PSNR += pow(t, 2);
 
 			default:
 				break;
