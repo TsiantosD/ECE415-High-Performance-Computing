@@ -127,11 +127,11 @@ double sobel(unsigned char *input, unsigned char *output, unsigned char *golden)
 		i_times_SIZE += SIZE;
 	}
 
-	i_times_SIZE = 1;
+	i_times_SIZE = 0;
 	for (i = 1; i < SIZE - 1; i++) {
 		const unsigned char *gold_row = &golden[i_times_SIZE];
 		const unsigned char *out_row = &output[i_times_SIZE];
-		for (j = 0; j < SIZE - 2; j++) {
+		for (j = 1; j < SIZE - 1; j++) {
 			temp_out = gold_row[j];
 			sum_golden += temp_out * temp_out;
 			second_term += temp_out * out_row[j];
