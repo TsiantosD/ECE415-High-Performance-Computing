@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/*   File:         wtime.c                                                   */
-/*   Description:  a timer that reports the current wall time                */
+/*   File:         kmeans.h   (an OpenMP version)                            */
+/*   Description:  header file for a simple k-means clustering program       */
 /*                                                                           */
 /*   Author:  Wei-keng Liao                                                  */
 /*            ECE Department Northwestern University                         */
@@ -11,32 +11,23 @@
 /*                                                                           */
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#include <sys/time.h>
-#include <stdio.h>
-#include <stdlib.h>
+#ifndef _H_KMEANS
+#define _H_KMEANS
 
-double wtime(void) 
-{
-    double          now_time;
-    struct timeval  etstart;
-    struct timezone tzp;
+#include <assert.h>
 
-    if (gettimeofday(&etstart, &tzp) == -1)
-        perror("Error: calling gettimeofday() not successful.\n");
+int seq_kmeans(float**, int, int, int, float, int*, float**);
+int par_kmeans(float**, int, int, int, float, int*, float**);
 
-    now_time = ((double)etstart.tv_sec) +              /* in seconds */
-               ((double)etstart.tv_usec) / 1000000.0;  /* in microseconds */
-    return now_time;
-}
+float** file_read(int, char*, int*, int*);
+int     file_write(char*, int, int, int, float**, int*, int);
 
-#ifdef _TESTING_
-int main(int argc, char **argv) {
-    double time;
+int read_n_objects(int, char*, int, int, float**);
 
-    time = wtime();
-    printf("time of day = %10.4f\n", time);
+int check_repeated_clusters(int, int, float**);
 
-    return 0;
-}
+double  wtime(void);
+
+extern int _debug;
+
 #endif
-

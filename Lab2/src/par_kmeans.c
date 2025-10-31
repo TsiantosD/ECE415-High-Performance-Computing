@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/*   File:         seq_kmeans.c  (sequential version)                        */
+/*   File:         par_kmeans.c  (sequential version)                        */
 /*   Description:  Implementation of simple k-means clustering algorithm     */
 /*                 This program takes an array of N data objects, each with  */
 /*                 M coordinates and performs a k-means clustering given a   */
@@ -66,9 +66,9 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
     return(index);
 }
 
-/*----< seq_kmeans() >-------------------------------------------------------*/
+/*----< par_kmeans() >-------------------------------------------------------*/
 /* return an array of cluster centers of size [numClusters][numCoords]       */
-int seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
+int par_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                int     numCoords,    /* no. features */
                int     numObjs,      /* no. objects */
                int     numClusters,  /* no. clusters */

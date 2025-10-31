@@ -1,0 +1,3 @@
+*.o
+seq_main
+par_main
