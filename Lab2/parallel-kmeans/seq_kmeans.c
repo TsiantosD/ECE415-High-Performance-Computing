@@ -21,7 +21,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <omp.h>
 
 #include "kmeans.h"
 
@@ -33,13 +32,11 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
                     float *coord1,   /* [numdims] */
                     float *coord2)   /* [numdims] */
 {
+    int i;
     float ans=0.0;
 
-    #pragma omp parallel for reduction(+:ans)
-    for (int i = 0; i < numdims; i++) {
-        const float dstCoord = coord1[i] - coord2[i];
-        ans -= dstCoord * dstCoord;
-    }
+    for (i=0; i<numdims; i++)
+        ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
 
     return(ans);
 }
@@ -102,6 +99,7 @@ int seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     do {
         delta = 0.0;
+        #pragma omp parallel for private(j, index) reduction(+:delta)
         for (i=0; i<numObjs; i++) {
             /* find the array index of nestest cluster center */
             index = find_nearest_cluster(numClusters, numCoords, objects[i],
@@ -114,12 +112,16 @@ int seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             membership[i] = index;
 
             /* update new cluster center : sum of objects located within */
+            #pragma omp critical
             newClusterSize[index]++;
+
+            #pragma omp critical
             for (j=0; j<numCoords; j++)
                 newClusters[index][j] += objects[i][j];
         }
 
         /* average the sum and replace old cluster center with newClusters */
+        #pragma omp parallel for private(j)
         for (i=0; i<numClusters; i++) {
             for (j=0; j<numCoords; j++) {
                 if (newClusterSize[i] > 0)
@@ -128,7 +130,7 @@ int seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             }
             newClusterSize[i] = 0;   /* set back to 0 */
         }
-            
+
         delta /= numObjs;
     } while (delta > threshold && loop++ < 500);
 
