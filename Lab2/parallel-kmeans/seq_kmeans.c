@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <omp.h>
 
 #include "kmeans.h"
 
@@ -32,11 +33,13 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
                     float *coord1,   /* [numdims] */
                     float *coord2)   /* [numdims] */
 {
-    int i;
     float ans=0.0;
 
-    for (i=0; i<numdims; i++)
-        ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
+    #pragma omp parallel for reduction(+:ans)
+    for (int i = 0; i < numdims; i++) {
+        const float dstCoord = coord1[i] - coord2[i];
+        ans -= dstCoord * dstCoord;
+    }
 
     return(ans);
 }

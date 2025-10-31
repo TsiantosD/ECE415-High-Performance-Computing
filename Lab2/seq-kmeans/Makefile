@@ -17,14 +17,14 @@
 all: seq 
 
 
-CC             = gcc
+CC             = icx
 
 INCFLAGS    = -I.
-OPTFLAGS    = -O4 -DNDEBUG
+OPTFLAGS    = -O3 -qopenmp -DNDEBUG
 LDFLAGS     = $(OPTFLAGS)
 
 
-CFLAGS      = $(OPTFLAGS) $(DFLAGS) $(INCFLAGS)
+CFLAGS      = $(OPTFLAGS) $(DFLAGS) $(INCFLAGS) -g
 
 
 H_FILES     = kmeans.h
