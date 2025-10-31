@@ -112,12 +112,12 @@ int seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             membership[i] = index;
 
             /* update new cluster center : sum of objects located within */
-            #pragma omp critical
-            newClusterSize[index]++;
-
-            #pragma omp critical
-            for (j=0; j<numCoords; j++)
-                newClusters[index][j] += objects[i][j];
+            #pragma omp critical 
+            {
+                newClusterSize[index]++;
+                for (j=0; j<numCoords; j++)
+                    newClusters[index][j] += objects[i][j];
+            }
         }
 
         /* average the sum and replace old cluster center with newClusters */
