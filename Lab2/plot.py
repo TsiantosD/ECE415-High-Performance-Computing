@@ -17,7 +17,7 @@ def extract_runtime(logfile):
     return None
 
 # --- Gather runtimes ---
-runtimes = {}
+runtimes = {}  # store {threads: {"mean": value, "std": value}}
 
 # Sequential run
 seq_logs_dir = os.path.join(METRICS_DIR, SEQ_DIR)
@@ -29,7 +29,10 @@ if os.path.exists(seq_logs_dir):
             if t is not None:
                 seq_times.append(t)
     if seq_times:
-        runtimes["seq"] = np.mean(seq_times)
+        runtimes["seq"] = {
+            "mean": np.mean(seq_times),
+            "std": np.std(seq_times),
+        }
 
 # Parallel runs
 metrics_par_dir = os.path.join(METRICS_DIR, THREAD_DIR_PREFIX)
@@ -37,7 +40,6 @@ if os.path.exists(metrics_par_dir):
     for thread_folder in os.listdir(metrics_par_dir):
         thread_path = os.path.join(metrics_par_dir, thread_folder)
         if os.path.isdir(thread_path):
-            # Parse number of threads from folder name, e.g., "4-threads"
             match = re.match(r"(\d+)-threads", thread_folder)
             if match:
                 threads = int(match.group(1))
@@ -48,19 +50,34 @@ if os.path.exists(metrics_par_dir):
                         if t is not None:
                             times.append(t)
                 if times:
-                    runtimes[threads] = np.mean(times)
+                    runtimes[threads] = {
+                        "mean": np.mean(times),
+                        "std": np.std(times),
+                    }
 
 # --- Prepare data for plotting ---
 sorted_keys = ["seq"] + sorted([k for k in runtimes.keys() if k != "seq"])
 x_labels = [str(k) for k in sorted_keys]
-y_values = [runtimes[k] for k in sorted_keys]
+means = [runtimes[k]["mean"] for k in sorted_keys]
+stds = [runtimes[k]["std"] for k in sorted_keys]
+
+# --- Compute speedup compared to sequential ---
+seq_time = runtimes["seq"]["mean"] if "seq" in runtimes else None
+speedups = [seq_time / m if seq_time and m > 0 else 1.0 for m in means]
 
 # --- Plot ---
 plt.figure(figsize=(10,6))
-plt.plot(x_labels, y_values, marker='o', linestyle='-', color='b')
+plt.errorbar(x_labels, means, yerr=stds, fmt='o-', capsize=5, color='b', ecolor='gray')
 plt.xlabel("Threads")
-plt.ylabel("Average Runtime (s)")
-plt.title("Average Runtime vs Threads for K-Means")
+plt.ylabel("Runtime (s)")
+plt.title("Average Runtime vs Threads (with Std Dev & Speedup)")
 plt.grid(True)
+
+# --- Annotate each point ---
+for i, (x, y, s, sd) in enumerate(zip(x_labels, means, speedups, stds)):
+    text = f"{y:.3f}s ± {sd:.3f}\nSpeedup: {s:.2f}×"
+    plt.text(i, y + sd * 1.05, text, ha='center', va='bottom', fontsize=9, color='black')
+
 plt.tight_layout()
+plt.savefig('plot_annotated.png')
 plt.show()
