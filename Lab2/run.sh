@@ -42,6 +42,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# --- Run make ---
+cd ./src
+make
+cd ..
+
 # --- Determine execution type ---
 if [[ -z "$EXEC_TYPE" ]]; then
     echo "Choose which version to run:"
