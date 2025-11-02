@@ -67,17 +67,24 @@ speedups = [seq_time / m if seq_time and m > 0 else 1.0 for m in means]
 
 # --- Plot ---
 plt.figure(figsize=(10,6))
-plt.errorbar(x_labels, means, yerr=stds, fmt='o-', capsize=5, color='b', ecolor='gray')
-plt.xlabel("Threads")
+plt.errorbar(x_labels, means, yerr=stds, fmt='o-', capsize=5, color='b', ecolor='red')
+plt.xlabel("#Threads")
 plt.ylabel("Runtime (s)")
-plt.title("Average Runtime vs Threads (with Std Dev & Speedup)")
+plt.title("Average Runtime per set of Threads")
 plt.grid(True)
+plt.margins(x=0.1, y=0.2)
 
 # --- Annotate each point ---
 for i, (x, y, s, sd) in enumerate(zip(x_labels, means, speedups, stds)):
-    text = f"{y:.3f}s ± {sd:.3f}\nSpeedup: {s:.2f}×"
-    plt.text(i, y + sd * 1.05, text, ha='center', va='bottom', fontsize=9, color='black')
+    # Runtime
+    runtime = f"{y:.3f}s ±{sd:.3f}\n"
+    plt.text(i, y + sd * 1.5, runtime, ha='center', va='bottom', fontsize=10, color='black')
+
+    # Speedup
+    speedup = f"{s:.2f}×"
+    plt.text(i, y - sd * 3, speedup, ha='center', va='top', fontsize=12, color='black')
 
 plt.tight_layout()
-plt.savefig('plot_annotated.png')
+plt.savefig('runtimes.png')
 plt.show()
+
