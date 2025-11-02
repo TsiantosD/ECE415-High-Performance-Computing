@@ -124,7 +124,7 @@ fi
 # --- Create log directory ---
 OUT_DIR="$METRICS_DIR/$THREAD_LABEL"
 mkdir -p "$OUT_DIR"
-TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S.%3N")
 LOGFILE="$OUT_DIR/${TIMESTAMP}.log"
 
 # --- Run summary ---
