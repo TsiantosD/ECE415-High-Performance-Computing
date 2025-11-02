@@ -35,6 +35,7 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
     int i;
     float ans=0.0;
 
+    #pragma omp simd reduction(+:ans) 
     for (i=0; i<numdims; i++)
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
 
