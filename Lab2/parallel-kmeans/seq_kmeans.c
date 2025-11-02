@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/*   File:         seq_kmeans.c  (sequential version)                        */
+/*   File:         par_kmeans.c  (sequential version)                        */
 /*   Description:  Implementation of simple k-means clustering algorithm     */
 /*                 This program takes an array of N data objects, each with  */
 /*                 M coordinates and performs a k-means clustering given a   */
@@ -34,7 +34,7 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
 {
     int i;
     float ans=0.0;
-    
+
     #pragma omp simd reduction(+:ans) 
     for (i=0; i<numdims; i++)
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
@@ -67,9 +67,9 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
     return(index);
 }
 
-/*----< seq_kmeans() >-------------------------------------------------------*/
+/*----< par_kmeans() >-------------------------------------------------------*/
 /* return an array of cluster centers of size [numClusters][numCoords]       */
-int seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
+int par_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                int     numCoords,    /* no. features */
                int     numObjs,      /* no. objects */
                int     numClusters,  /* no. clusters */
@@ -100,27 +100,25 @@ int seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     do {
         delta = 0.0;
-        #pragma omp parallel for private(j, index)
+        #pragma omp parallel for private(j, index) reduction(+:delta)
         for (i=0; i<numObjs; i++) {
-            float local_delta = 0.0;
             /* find the array index of nestest cluster center */
             index = find_nearest_cluster(numClusters, numCoords, objects[i],
                                          clusters);
 
             /* if membership changes, increase delta by 1 */
-            if (membership[i] != index) local_delta += 1.0;
+            if (membership[i] != index) delta += 1.0;
 
             /* assign the membership to object i */
             membership[i] = index;
 
             /* update new cluster center : sum of objects located within */
-            #pragma omp critical 
-            {
-                delta += local_delta;
-                newClusterSize[index]++;
-                for (j=0; j<numCoords; j++)
-                    newClusters[index][j] += objects[i][j];
-            }
+            #pragma omp atomic
+            newClusterSize[index]++;
+            for (j=0; j<numCoords; j++) {
+                #pragma omp atomic
+	        newClusters[index][j] += objects[i][j];
+	    }
         }
 
         /* average the sum and replace old cluster center with newClusters */
