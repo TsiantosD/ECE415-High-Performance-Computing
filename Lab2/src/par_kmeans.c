@@ -100,27 +100,25 @@ int par_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     do {
         delta = 0.0;
-        #pragma omp parallel for private(j, index)
+        #pragma omp parallel for private(j, index) reduction(+:delta)
         for (i=0; i<numObjs; i++) {
-            float local_delta = 0.0;
             /* find the array index of nestest cluster center */
             index = find_nearest_cluster(numClusters, numCoords, objects[i],
                                          clusters);
 
             /* if membership changes, increase delta by 1 */
-            if (membership[i] != index) local_delta += 1.0;
+            if (membership[i] != index) delta += 1.0;
 
             /* assign the membership to object i */
             membership[i] = index;
 
             /* update new cluster center : sum of objects located within */
-            #pragma omp critical 
-            {
-                delta += local_delta;
-                newClusterSize[index]++;
-                for (j=0; j<numCoords; j++)
-                    newClusters[index][j] += objects[i][j];
-            }
+            #pragma omp atomic
+            newClusterSize[index]++;
+            for (j=0; j<numCoords; j++) {
+                #pragma omp atomic
+	        newClusters[index][j] += objects[i][j];
+	    }
         }
 
         /* average the sum and replace old cluster center with newClusters */
