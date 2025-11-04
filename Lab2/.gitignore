@@ -3,3 +3,4 @@ metrics*/
 package
 venv
 *.png
+*.tar.gz
