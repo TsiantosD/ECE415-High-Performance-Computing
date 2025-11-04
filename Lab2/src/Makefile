@@ -19,7 +19,7 @@ all: seq par
 
 CC          = icx
 INCFLAGS    = -I.
-OPTFLAGS    = -O3 -qopenmp -DNDEBUG
+OPTFLAGS    = -O3 -ffast-math -qopenmp -DNDEBUG
 LDFLAGS     = $(OPTFLAGS)
 CFLAGS      = $(OPTFLAGS) $(DFLAGS) $(INCFLAGS) -g
 
