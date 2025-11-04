@@ -28,6 +28,9 @@ if os.path.exists(seq_logs_dir):
             t = extract_runtime(os.path.join(seq_logs_dir, fname))
             if t is not None:
                 seq_times.append(t)
+    if len(seq_times) >= 3:
+        seq_times.remove(max(seq_times))
+        seq_times.remove(min(seq_times))
     if seq_times:
         runtimes["seq"] = {
             "mean": np.mean(seq_times),
@@ -49,6 +52,9 @@ if os.path.exists(metrics_par_dir):
                         t = extract_runtime(os.path.join(thread_path, fname))
                         if t is not None:
                             times.append(t)
+                if len(times) >= 3:
+                    times.remove(max(times))
+                    times.remove(min(times))
                 if times:
                     runtimes[threads] = {
                         "mean": np.mean(times),
