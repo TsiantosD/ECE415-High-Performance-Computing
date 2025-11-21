@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/*   File:         seq_main.c   (an sequential version)                      */
+/*   File:         seq_main.c   (a parallel version)                         */
 /*   Description:  This program shows an example on how to call a subroutine */
 /*                 that implements a simple k-means clustering algorithm     */
 /*                 based on Euclid distance.                                 */
@@ -168,7 +168,7 @@ int main(int argc, char **argv) {
     membership = (int*) malloc(numObjs * sizeof(int));
     assert(membership != NULL);
 
-    seq_kmeans(objects, numCoords, numObjs, numClusters, threshold, membership,
+    par_kmeans(objects, numCoords, numObjs, numClusters, threshold, membership,
                clusters);
 
     free(objects[0]);
@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
     /*---- output performance numbers ---------------------------------------*/
     if (is_output_timing) {
         io_timing += wtime() - timing;
-        printf("\nPerforming **** Regular Kmeans (sequential version) ****\n");
+        printf("\nPerforming **** Kmeans (parallel version) ****\n");
 
         printf("Input file:     %s\n", filename);
         printf("numObjs       = %d\n", numObjs);

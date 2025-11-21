@@ -115,10 +115,11 @@ int par_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             /* update new cluster center : sum of objects located within */
             #pragma omp atomic
             newClusterSize[index]++;
+
             for (j=0; j<numCoords; j++) {
                 #pragma omp atomic
-	        newClusters[index][j] += objects[i][j];
-	    }
+	            newClusters[index][j] += objects[i][j];
+	        }
         }
 
         /* average the sum and replace old cluster center with newClusters */
@@ -141,3 +142,4 @@ int par_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     return 1;
 }
+
