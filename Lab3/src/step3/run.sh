@@ -28,7 +28,7 @@ fi
 echo "Starting execution loop (0 to $UPPER_LIMIT)..."
 
 # Loop from START to UPPER_LIMIT - 1
-for (( i=START_INPUT; i<UPPER_LIMIT; i++ ))
+for (( i=START_INPUT; i<=UPPER_LIMIT; i++ ))
 do
     # Generate timestamp (YearMonthDay_HourMinuteSecond)
     TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
