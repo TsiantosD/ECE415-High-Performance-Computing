@@ -3,7 +3,7 @@
 # ================= CONFIGURATION =================
 # Command to run your program. 
 # Change this to your actual executable path (e.g., "./my_solver")
-PROGRAM="python3 mock_program.py"
+PROGRAM="./convolution2d"
 
 # Ask for suffix
 read -p "Enter output directory suffix (optional): " SUFFIX
@@ -15,7 +15,7 @@ else
 fi
 
 START_INPUT=0
-UPPER_LIMIT=50
+UPPER_LIMIT=15
 FIXED_SECOND_INPUT=32
 # =================================================
 
@@ -28,7 +28,7 @@ fi
 echo "Starting execution loop (0 to $UPPER_LIMIT)..."
 
 # Loop from START to UPPER_LIMIT - 1
-for (( i=START_INPUT; i<UPPER_LIMIT; i++ ))
+for (( i=START_INPUT; i<=UPPER_LIMIT; i++ ))
 do
     # Calculate the actual input value: 2 * i + 1
     INPUT_VAL=$((2 * i + 1))
