@@ -15,7 +15,7 @@ else
 fi
 
 START_INPUT=0
-UPPER_LIMIT=50
+UPPER_LIMIT=15
 FIXED_SECOND_INPUT=32
 # =================================================
 
