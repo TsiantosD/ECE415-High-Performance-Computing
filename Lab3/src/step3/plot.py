@@ -62,7 +62,7 @@ def parse_results(current_output_dir):
                     if value > 0:
                         digits = -math.log10(value)
                     else:
-                        digits = 16 # Cap for 0 difference (infinite precision)
+                        digits = 7 # Cap for 0 difference (infinite precision)
                         
                     data_points.append({
                         'x': first_input,
@@ -128,7 +128,7 @@ def plot_data(x, y_diff, y_digits, second_input_label, suffix_name):
     # --- Graph 2: Decimal Digits ---
     plt.figure(figsize=(10, 6))
     plt.plot(x, y_digits, 'r-s', markersize=4, linewidth=1)
-    plt.title(f'Precision vs Input ({suffix_name})')
+    plt.title(f'Precision vs Filter Length ({suffix_name})')
     plt.xlabel('Filter Length')
     plt.ylabel('Decimal Digits')
     plt.grid(True, linestyle='--', alpha=0.7)
