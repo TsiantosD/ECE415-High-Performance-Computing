@@ -44,9 +44,7 @@ do
     echo "$INPUT_VAL $FIXED_SECOND_INPUT" | $PROGRAM > "$FILEPATH" 2>&1
     
     # Optional: Print status every 10 runs to avoid clutter
-    if (( i % 10 == 0 )); then
-        echo "Processed iteration $i (Input: $INPUT_VAL)..."
-    fi
+    echo "Processed iteration $i (Input: $INPUT_VAL)..."
 done
 
 echo "Execution complete. Files saved in '$OUTPUT_DIR'."
