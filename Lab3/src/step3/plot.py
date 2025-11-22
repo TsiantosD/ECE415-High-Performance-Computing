@@ -5,22 +5,22 @@ from datetime import datetime
 
 # ================= CONFIGURATION =================
 # Folders
-OUTPUT_DIR = "output"   # Where the existing data files are located
+# OUTPUT_DIR removed, we will scan dynamically
 PLOTS_DIR = "plots"     # Where to save the new graph images
 # =================================================
 
-def parse_results():
+def parse_results(current_output_dir):
     """Reads the output files and extracts data for plotting."""
     data_points = [] # Stores dicts with parsed data
 
-    if not os.path.exists(OUTPUT_DIR):
-        print(f"Error: Directory '{OUTPUT_DIR}' not found. Please ensure data exists.")
+    if not os.path.exists(current_output_dir):
+        print(f"Error: Directory '{current_output_dir}' not found. Please ensure data exists.")
         return [], [], [], None
 
-    print(f"Scanning '{OUTPUT_DIR}' for files...")
+    print(f"Scanning '{current_output_dir}' for files...")
     
     try:
-        files = os.listdir(OUTPUT_DIR)
+        files = os.listdir(current_output_dir)
     except OSError as e:
         print(f"Error accessing directory: {e}")
         return [], [], [], None
@@ -42,7 +42,7 @@ def parse_results():
             # Skip files that don't match the integer pattern
             continue
 
-        filepath = os.path.join(OUTPUT_DIR, filename)
+        filepath = os.path.join(current_output_dir, filename)
 
         with open(filepath, "r") as f:
             lines = f.readlines()
@@ -94,7 +94,7 @@ def parse_results():
     print(f"Found {len(inputs_x)} valid data files.")
     return inputs_x, max_diffs_y, decimal_digits_y, second_input_label
 
-def plot_data(x, y_diff, y_digits, second_input_label):
+def plot_data(x, y_diff, y_digits, second_input_label, suffix_name):
     """Generates two separate plot files with timestamps."""
     
     if not x:
@@ -108,16 +108,18 @@ def plot_data(x, y_diff, y_digits, second_input_label):
 
     # Generate timestamp for unique filenames
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    suffix_str = f"_{suffix_name}" if suffix_name else ""
 
     # --- Graph 1: Max Difference ---
     plt.figure(figsize=(10, 6))
     plt.plot(x, y_diff, 'b-o', markersize=4, linewidth=1)
-    plt.title(f'Max Difference vs Input (Second Input: {second_input_label})')
+    plt.title(f'Max Difference vs Input ({suffix_name})')
     plt.xlabel('First Input Value')
     plt.ylabel('Max Difference (Float)')
     plt.grid(True, linestyle='--', alpha=0.7)
     
-    filename1 = f"max_diff_{timestamp}.png"
+    filename1 = f"max_diff{suffix_str}_{timestamp}.png"
     filepath1 = os.path.join(PLOTS_DIR, filename1)
     plt.savefig(filepath1)
     print(f"Saved plot 1: {filepath1}")
@@ -126,18 +128,36 @@ def plot_data(x, y_diff, y_digits, second_input_label):
     # --- Graph 2: Decimal Digits ---
     plt.figure(figsize=(10, 6))
     plt.plot(x, y_digits, 'r-s', markersize=4, linewidth=1)
-    plt.title(f'Precision (Decimal Digits) vs Input (Second Input: {second_input_label})')
+    plt.title(f'Precision vs Input ({suffix_name})')
     plt.xlabel('First Input Value')
     plt.ylabel('Decimal Digits (-log10(diff))')
     plt.grid(True, linestyle='--', alpha=0.7)
     
-    filename2 = f"decimal_digits_{timestamp}.png"
+    filename2 = f"decimal_digits{suffix_str}_{timestamp}.png"
     filepath2 = os.path.join(PLOTS_DIR, filename2)
     plt.savefig(filepath2)
     print(f"Saved plot 2: {filepath2}")
     plt.close() # Clear memory
 
 if __name__ == "__main__":
-    x_data, diff_data, digits_data, sec_label = parse_results()
-    if x_data:
-        plot_data(x_data, diff_data, digits_data, sec_label)
+    # Find all directories starting with "output"
+    dirs = [d for d in os.listdir('.') if os.path.isdir(d) and d.startswith('output')]
+    
+    if not dirs:
+        print("No 'output' directories found.")
+    else:
+        print(f"Found directories: {dirs}")
+    
+    for d in dirs:
+        # Extract suffix for labeling
+        # output_test -> test
+        # output -> default
+        if '_' in d:
+            current_suffix = d.split('_', 1)[1]
+        else:
+            current_suffix = "default"
+
+        print(f"\nProcessing directory: {d}")
+        x_data, diff_data, digits_data, sec_label = parse_results(d)
+        if x_data:
+            plot_data(x_data, diff_data, digits_data, sec_label, current_suffix)

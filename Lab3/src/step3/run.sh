@@ -5,9 +5,17 @@
 # Change this to your actual executable path (e.g., "./my_solver")
 PROGRAM="./convolution2d"
 
-OUTPUT_DIR="output"
+# Ask for suffix
+read -p "Enter output directory suffix (optional): " SUFFIX
+
+if [ -n "$SUFFIX" ]; then
+    OUTPUT_DIR="output_${SUFFIX}"
+else
+    OUTPUT_DIR="output"
+fi
+
 START_INPUT=0
-UPPER_LIMIT=15
+UPPER_LIMIT=50
 FIXED_SECOND_INPUT=32
 # =================================================
 
@@ -20,7 +28,7 @@ fi
 echo "Starting execution loop (0 to $UPPER_LIMIT)..."
 
 # Loop from START to UPPER_LIMIT - 1
-for (( i=START_INPUT; i<=UPPER_LIMIT; i++ ))
+for (( i=START_INPUT; i<UPPER_LIMIT; i++ ))
 do
     # Generate timestamp (YearMonthDay_HourMinuteSecond)
     TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
