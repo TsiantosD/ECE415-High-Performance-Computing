@@ -204,6 +204,7 @@ int main(int argc, char **argv) {
     
     printf("GPU computation...\n");
     convolutionRowGPU<<<dimGrid, dimBlock>>>(d_Buffer, d_Input, d_Filter, imageW, imageH, filter_radius);
+    cudaDeviceSynchronize();
     convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Output, d_Buffer, d_Filter, imageW, imageH, filter_radius);
     cudaDeviceSynchronize(); // TODO: Remove
 
@@ -234,6 +235,7 @@ int main(int argc, char **argv) {
             maxDiff = diff > maxDiff ? diff : maxDiff;
 
             if (diff > accuracy) {
+		correctOutput = 0;
                 printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
                 printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
                 printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
@@ -243,8 +245,8 @@ int main(int argc, char **argv) {
 
     if (correctOutput)
         printf("Results correct!\n");
-    else
-        printf("Max difference: %f\n", maxDiff);
+
+    printf("Max difference: %f\n", maxDiff);
 
     // Cleanup sequence
     CLEANUP_DEVICE:
