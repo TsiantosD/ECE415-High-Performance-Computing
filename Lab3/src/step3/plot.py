@@ -60,7 +60,7 @@ def parse_results(current_output_dir):
                     
                     # Calculate Decimal Digits
                     if value > 0:
-                        digits = -math.log10(value)
+                        digits = math.ceil(-math.log10(value)) - 1
                     else:
                         digits = 7 # Cap for 0 difference (infinite precision)
                         
