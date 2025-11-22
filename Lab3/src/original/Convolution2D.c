@@ -48,7 +48,7 @@ void convolutionRowCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Fi
                     sum += h_Src[y * imageW + d] * h_Filter[filterR - k];
                 }     
 
-                h_Dst[y * imageW + x] = sum;
+                h_Dst[y * imageW + x] = sum; //TODO: Move outside loop
             }
         }
     }
@@ -72,9 +72,9 @@ void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h
 
                 if (d >= 0 && d < imageH) {
                     sum += h_Src[d * imageW + x] * h_Filter[filterR - k];
-                }   
+                }
  
-                h_Dst[y * imageW + x] = sum;
+                h_Dst[y * imageW + x] = sum; //TODO: Move outside loop
             }
         }
     }
@@ -88,7 +88,10 @@ int main(int argc, char **argv) {
         *h_Filter = NULL,
         *h_Input = NULL,
         *h_Buffer = NULL,
-        *h_OutputCPU = NULL;
+        *h_OutputCPU = NULL,
+        *d_Filter = NULL,
+        *d_Input = NULL,
+        *d_Output = NULL;
 
     int imageW;
     int imageH;
@@ -140,8 +143,14 @@ int main(int argc, char **argv) {
     // TODO: Kanete h sugrish anamesa se GPU kai CPU kai an estw kai kapoio apotelesma xeperna thn akriveia
     // pou exoume orisei, tote exoume sfalma kai mporoume endexomenws na termatisoume to programma mas  
 
-    // Cleanup sequence
+    // for (int i = 0; i < imageH; i++) {
+    //     for (int j = 0; j < imageW; j++) {
+    //         printf("%12.5f ", *(h_OutputCPU + i * imageW + j));
+    //     }
+    //     printf("\n");
+    // }
 
+    // Cleanup sequence
     CLEANUP_HOST:
     free(h_OutputCPU);
     free(h_Buffer);
