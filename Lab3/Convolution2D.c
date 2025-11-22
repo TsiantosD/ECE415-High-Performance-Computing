@@ -6,11 +6,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+typedef enum {
+    HOST_ALLOC = 1,
+    NORMAL = 0
+} errorCode;
+
 unsigned int filter_radius;
+errorCode exitCode = NORMAL;
 
 #define FILTER_LENGTH    (2 * filter_radius + 1)
 #define ABS(val)         ((val)<0.0 ? (-(val)) : (val))
 #define accuracy         0.00005 
+
+#define CHECK_ALLOC(ptr, label)        \
+    do {                               \
+        if ((ptr) == NULL) {           \
+            exitCode = HOST_ALLOC;     \
+            printf("Allocation failed: %s\n", #ptr); \
+            goto label;                \
+        }                              \
+    } while(0)
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reference row convolution filter
@@ -63,12 +78,10 @@ void convolutionColumnCPU(float *h_Dst, float *h_Src, float *h_Filter,
     }
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // Main program
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
-    
     float
         *h_Filter,
         *h_Input,
@@ -92,11 +105,15 @@ int main(int argc, char **argv) {
 
     printf("Image Width x Height = %i x %i\n\n", imageW, imageH);
     printf("Allocating and initializing host arrays...\n");
-    // Tha htan kalh idea na elegxete kai to apotelesma twn malloc...
+
     h_Filter    = (float *)malloc(FILTER_LENGTH * sizeof(float));
+    CHECK_ALLOC(h_Filter, CLEANUP0);
     h_Input     = (float *)malloc(imageW * imageH * sizeof(float));
+    CHECK_ALLOC(h_Input, CLEANUP1);
     h_Buffer    = (float *)malloc(imageW * imageH * sizeof(float));
+    CHECK_ALLOC(h_Buffer, CLEANUP2);
     h_OutputCPU = (float *)malloc(imageW * imageH * sizeof(float));
+    CHECK_ALLOC(h_OutputCPU, CLEANUP3);
 
     // to 'h_Filter' apotelei to filtro me to opoio ginetai to convolution kai
     // arxikopoieitai tuxaia. To 'h_Input' einai h eikona panw sthn opoia ginetai
@@ -111,24 +128,28 @@ int main(int argc, char **argv) {
     for (i = 0; i < imageW * imageH; i++) {
         h_Input[i] = (float)rand() / ((float)RAND_MAX / 255) + (float)rand() / (float)RAND_MAX;
     }
-    // To parakatw einai to kommati pou ekteleitai sthn CPU kai me vash auto prepei na ginei h sugrish me thn GPU.
+    // TODO: To parakatw einai to kommati pou ekteleitai sthn CPU kai me vash auto prepei na ginei h sugrish me thn GPU.
 
     printf("CPU computation...\n");
 
     convolutionRowCPU(h_Buffer, h_Input, h_Filter, imageW, imageH, filter_radius);
     convolutionColumnCPU(h_OutputCPU, h_Buffer, h_Filter, imageW, imageH, filter_radius);
     
-    // Kanete h sugrish anamesa se GPU kai CPU kai an estw kai kapoio apotelesma xeperna thn akriveia
+    // TODO: Kanete h sugrish anamesa se GPU kai CPU kai an estw kai kapoio apotelesma xeperna thn akriveia
     // pou exoume orisei, tote exoume sfalma kai mporoume endexomenws na termatisoume to programma mas  
 
-    // free all the allocated memory
+    // Cleanup sequence
+    CLEANUP4:
     free(h_OutputCPU);
+    CLEANUP3:
     free(h_Buffer);
+    CLEANUP2:
     free(h_Input);
+    CLEANUP1:
     free(h_Filter);
-
-    // Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
+    CLEANUP0:
+    // TODO: Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
     // cudaDeviceReset();
 
-    return 0;
+    return exitCode;
 }
