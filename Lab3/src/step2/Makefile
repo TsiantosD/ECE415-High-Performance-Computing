@@ -20,7 +20,7 @@ SRC := Convolution2D.cu
 COMMON_FLAGS := -O4 -fmad=false 
 
 # Debugging Flags
-DEBUG_FLAGS := -g
+DEBUG_FLAGS := -g -G
 
 # ------------------------------------------
 # Build Rules
