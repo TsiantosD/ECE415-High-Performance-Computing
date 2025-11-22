@@ -96,6 +96,35 @@ void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h
 ////////////////////////////////////////////////////////////////////////////////
 // Kernel convolution filter
 ////////////////////////////////////////////////////////////////////////////////
+__global__ void convolutionRowGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelScalar *d_Filter,
+                               int imageW, int imageH, int filterR) {
+    int k;
+    PixelScalar sum = 0;
+    
+    for (k = -filterR; k <= filterR; k++) {
+        int d = threadIdx.x + k;
+
+        if (d >= 0 && d < imageW)
+            sum += d_Src[threadIdx.y * imageW + d] * d_Filter[filterR - k];
+    }
+
+    d_Dst[threadIdx.y * imageW + threadIdx.x] = sum;
+}
+
+__global__ void convolutionColumnGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelScalar *d_Filter,
+                               int imageW, int imageH, int filterR) {
+    int k;
+    PixelScalar sum = 0;
+    
+    for (k = -filterR; k <= filterR; k++) {
+        int d = threadIdx.y + k;
+
+        if (d >= 0 && d < imageH)
+            sum += d_Src[d * imageW + threadIdx.x] * d_Filter[filterR - k];
+    }
+
+    d_Dst[threadIdx.y * imageW + threadIdx.x] = sum;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Main program
@@ -109,12 +138,14 @@ int main(int argc, char **argv) {
         *h_OutputGPU = NULL,
         *d_Filter = NULL,
         *d_Input = NULL,
+        *d_Buffer = NULL,
         *d_Output = NULL;
 
     int imageW;
     int imageH;
     unsigned int i;
     int correctOutput = 1;
+    dim3 dimGrid(1);
   
     printf("Enter filter radius : ");
     scanf("%d", &filter_radius);
@@ -126,6 +157,7 @@ int main(int argc, char **argv) {
     printf("Enter image size. Should be a power of two and greater than %d : ", FILTER_LENGTH);
     scanf("%d", &imageW);
     imageH = imageW;
+    dim3 dimBlock(imageW, imageH);
 
     printf("Image Width x Height = %i x %i\n\n", imageW, imageH);
     printf("Allocating and initializing host arrays...\n");
@@ -144,11 +176,9 @@ int main(int argc, char **argv) {
     CUDA_CHECK_LAST_ERROR();
     cudaMalloc((void **) &d_Input, imageW * imageH * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
+    cudaMalloc((void **) &d_Buffer, imageW * imageH * sizeof(PixelScalar));
+    CUDA_CHECK_LAST_ERROR();
     cudaMalloc((void **) &d_Output, imageW * imageH * sizeof(PixelScalar));
-    CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_Filter, h_Filter, FILTER_LENGTH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
-    CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_Input, h_Input, imageW * imageH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
 
     // to 'h_Filter' apotelei to filtro me to opoio ginetai to convolution kai
@@ -164,9 +194,17 @@ int main(int argc, char **argv) {
     for (i = 0; i < imageW * imageH; i++) {
         h_Input[i] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
     }
+
+    // Copy h_Filter and h_Input to GPU
+    cudaMemcpy(d_Filter, h_Filter, FILTER_LENGTH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
+    CUDA_CHECK_LAST_ERROR();
+    cudaMemcpy(d_Input, h_Input, imageW * imageH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
+    CUDA_CHECK_LAST_ERROR();
     
     printf("GPU computation...\n");
-    // TODO: Launch kernel
+    convolutionRowGPU<<<dimGrid, dimBlock>>>(d_Buffer, d_Input, d_Filter, imageW, imageH, filter_radius);
+    convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Output, d_Buffer, d_Filter, imageW, imageH, filter_radius);
+    cudaDeviceSynchronize(); // TODO: Remove
 
     // To parakatw einai to kommati pou ekteleitai sthn CPU kai me vash auto prepei na ginei h sugrish me thn GPU.
     printf("CPU computation...\n");
@@ -178,7 +216,7 @@ int main(int argc, char **argv) {
     cudaMemcpy(h_OutputGPU, d_Output, imageW * imageH * sizeof(PixelScalar), cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
 
-    // TODO: Kanete h sugrish anamesa se GPU kai CPU kai an estw kai kapoio apotelesma xeperna thn akriveia
+    // Kanete h sugrish anamesa se GPU kai CPU kai an estw kai kapoio apotelesma xeperna thn akriveia
     // pou exoume orisei, tote exoume sfalma kai mporoume endexomenws na termatisoume to programma mas  
 
     // for (int i = 0; i < imageH; i++) {
@@ -212,6 +250,7 @@ int main(int argc, char **argv) {
     CLEANUP_DEVICE:
     cudaFree(d_Filter);
     cudaFree(d_Input);
+    cudaFree(d_Buffer);
     cudaFree(d_Output);
     CLEANUP_HOST:
     free(h_Filter);
