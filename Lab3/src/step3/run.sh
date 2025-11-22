@@ -41,10 +41,10 @@ do
     FILEPATH="${OUTPUT_DIR}/${FILENAME}"
     
     # Run the program with the calculated input and redirect
-    echo "$INPUT_VAL $FIXED_SECOND_INPUT" | $PROGRAM > "$FILEPATH" 2>&1
+    echo "$i $FIXED_SECOND_INPUT" | $PROGRAM > "$FILEPATH" 2>&1
     
     # Optional: Print status every 10 runs to avoid clutter
-    echo "Processed iteration $i (Input: $INPUT_VAL)..."
+    echo "Processed radius $i (Length: $INPUT_VAL)..."
 done
 
 echo "Execution complete. Files saved in '$OUTPUT_DIR'."
