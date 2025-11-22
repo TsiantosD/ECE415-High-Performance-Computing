@@ -145,6 +145,7 @@ int main(int argc, char **argv) {
     int imageH;
     unsigned int i;
     int correctOutput = 1;
+    float maxDiff = 0;
     dim3 dimGrid(1);
   
     printf("Enter filter radius : ");
@@ -229,22 +230,21 @@ int main(int argc, char **argv) {
     for (int y = 0; y < imageH; y++) {
         for (int x = 0; x < imageW; x++) {
             int index = y * imageW + x;
+            float diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
+            maxDiff = diff > maxDiff ? diff : maxDiff;
 
-            if (ABS(h_OutputCPU[index] - h_OutputGPU[index]) > accuracy) {
+            if (diff > accuracy) {
                 printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
                 printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
                 printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
-                correctOutput = 0;
-                break;
             }
         }
-
-        if (!correctOutput)
-            break;
     }
 
     if (correctOutput)
         printf("Results correct!\n");
+    else
+        printf("Max difference: %f\n", maxDiff);
 
     // Cleanup sequence
     CLEANUP_DEVICE:
