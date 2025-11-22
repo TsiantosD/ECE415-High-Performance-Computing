@@ -85,10 +85,10 @@ void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
     PixelScalar
-        *h_Filter,
-        *h_Input,
-        *h_Buffer,
-        *h_OutputCPU;
+        *h_Filter = NULL,
+        *h_Input = NULL,
+        *h_Buffer = NULL,
+        *h_OutputCPU = NULL;
 
     int imageW;
     int imageH;
@@ -109,13 +109,13 @@ int main(int argc, char **argv) {
     printf("Allocating and initializing host arrays...\n");
 
     h_Filter    = (PixelScalar *)malloc(FILTER_LENGTH * sizeof(PixelScalar));
-    CHECK_ALLOC(h_Filter, CLEANUP0);
+    CHECK_ALLOC(h_Filter, CLEANUP_HOST);
     h_Input     = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
-    CHECK_ALLOC(h_Input, CLEANUP1);
+    CHECK_ALLOC(h_Input, CLEANUP_HOST);
     h_Buffer    = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
-    CHECK_ALLOC(h_Buffer, CLEANUP2);
+    CHECK_ALLOC(h_Buffer, CLEANUP_HOST);
     h_OutputCPU = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
-    CHECK_ALLOC(h_OutputCPU, CLEANUP3);
+    CHECK_ALLOC(h_OutputCPU, CLEANUP_HOST);
 
     // to 'h_Filter' apotelei to filtro me to opoio ginetai to convolution kai
     // arxikopoieitai tuxaia. To 'h_Input' einai h eikona panw sthn opoia ginetai
@@ -141,13 +141,11 @@ int main(int argc, char **argv) {
     // pou exoume orisei, tote exoume sfalma kai mporoume endexomenws na termatisoume to programma mas  
 
     // Cleanup sequence
-    CLEANUP4:
+
+    CLEANUP_HOST:
     free(h_OutputCPU);
-    CLEANUP3:
     free(h_Buffer);
-    CLEANUP2:
     free(h_Input);
-    CLEANUP1:
     free(h_Filter);
     CLEANUP0:
     // TODO: Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
