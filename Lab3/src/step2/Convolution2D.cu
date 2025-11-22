@@ -203,6 +203,7 @@ int main(int argc, char **argv) {
     
     printf("GPU computation...\n");
     convolutionRowGPU<<<dimGrid, dimBlock>>>(d_Buffer, d_Input, d_Filter, imageW, imageH, filter_radius);
+    cudaDeviceSynchronize();
     convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Output, d_Buffer, d_Filter, imageW, imageH, filter_radius);
     cudaDeviceSynchronize(); // TODO: Remove
 
