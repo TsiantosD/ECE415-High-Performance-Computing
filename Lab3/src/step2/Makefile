@@ -19,7 +19,7 @@ SRC := Convolution2D.cu
 COMMON_FLAGS := -O4
 
 # Debugging Flags
-DEBUG_FLAGS := -g -G -lineinfo
+DEBUG_FLAGS := -g -G
 
 # ------------------------------------------
 # Build Rules
