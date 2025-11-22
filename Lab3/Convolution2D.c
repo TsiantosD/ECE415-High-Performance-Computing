@@ -8,11 +8,9 @@
 
 unsigned int filter_radius;
 
-#define FILTER_LENGTH 	(2 * filter_radius + 1)
-#define ABS(val)  	((val)<0.0 ? (-(val)) : (val))
-#define accuracy  	0.00005 
-
- 
+#define FILTER_LENGTH    (2 * filter_radius + 1)
+#define ABS(val)         ((val)<0.0 ? (-(val)) : (val))
+#define accuracy         0.00005 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reference row convolution filter
@@ -20,24 +18,23 @@ unsigned int filter_radius;
 void convolutionRowCPU(float *h_Dst, float *h_Src, float *h_Filter, 
                        int imageW, int imageH, int filterR) {
 
-  int x, y, k;
+    int x, y, k;
                       
-  for (y = 0; y < imageH; y++) {
-    for (x = 0; x < imageW; x++) {
-      float sum = 0;
+    for (y = 0; y < imageH; y++) {
+        for (x = 0; x < imageW; x++) {
+            float sum = 0;
 
-      for (k = -filterR; k <= filterR; k++) {
-        int d = x + k;
+            for (k = -filterR; k <= filterR; k++) {
+                int d = x + k;
 
-        if (d >= 0 && d < imageW) {
-          sum += h_Src[y * imageW + d] * h_Filter[filterR - k];
-        }     
+                if (d >= 0 && d < imageW) {
+                    sum += h_Src[y * imageW + d] * h_Filter[filterR - k];
+                }     
 
-        h_Dst[y * imageW + x] = sum;
-      }
+                h_Dst[y * imageW + x] = sum;
+            }
+        }
     }
-  }
-        
 }
 
 
@@ -45,26 +42,25 @@ void convolutionRowCPU(float *h_Dst, float *h_Src, float *h_Filter,
 // Reference column convolution filter
 ////////////////////////////////////////////////////////////////////////////////
 void convolutionColumnCPU(float *h_Dst, float *h_Src, float *h_Filter,
-    			   int imageW, int imageH, int filterR) {
+                          int imageW, int imageH, int filterR) {
 
-  int x, y, k;
+    int x, y, k;
   
-  for (y = 0; y < imageH; y++) {
-    for (x = 0; x < imageW; x++) {
-      float sum = 0;
+    for (y = 0; y < imageH; y++) {
+        for (x = 0; x < imageW; x++) {
+            float sum = 0;
 
-      for (k = -filterR; k <= filterR; k++) {
-        int d = y + k;
+            for (k = -filterR; k <= filterR; k++) {
+                int d = y + k;
 
-        if (d >= 0 && d < imageH) {
-          sum += h_Src[d * imageW + x] * h_Filter[filterR - k];
-        }   
+                if (d >= 0 && d < imageH) {
+                    sum += h_Src[d * imageW + x] * h_Filter[filterR - k];
+                }   
  
-        h_Dst[y * imageW + x] = sum;
-      }
+                h_Dst[y * imageW + x] = sum;
+            }
+        }
     }
-  }
-    
 }
 
 
@@ -74,22 +70,21 @@ void convolutionColumnCPU(float *h_Dst, float *h_Src, float *h_Filter,
 int main(int argc, char **argv) {
     
     float
-    *h_Filter,
-    *h_Input,
-    *h_Buffer,
-    *h_OutputCPU;
-
+        *h_Filter,
+        *h_Input,
+        *h_Buffer,
+        *h_OutputCPU;
 
     int imageW;
     int imageH;
     unsigned int i;
-
-	printf("Enter filter radius : ");
-	scanf("%d", &filter_radius);
+  
+    printf("Enter filter radius : ");
+    scanf("%d", &filter_radius);
 
     // Ta imageW, imageH ta dinei o xrhsths kai thewroume oti einai isa,
     // dhladh imageW = imageH = N, opou to N to dinei o xrhsths.
-    // Gia aplothta thewroume tetragwnikes eikones.  
+    // Gia aplothta thewroume tetragwnikes eikones.     
 
     printf("Enter image size. Should be a power of two and greater than %d : ", FILTER_LENGTH);
     scanf("%d", &imageW);
@@ -116,19 +111,15 @@ int main(int argc, char **argv) {
     for (i = 0; i < imageW * imageH; i++) {
         h_Input[i] = (float)rand() / ((float)RAND_MAX / 255) + (float)rand() / (float)RAND_MAX;
     }
-
-
     // To parakatw einai to kommati pou ekteleitai sthn CPU kai me vash auto prepei na ginei h sugrish me thn GPU.
+
     printf("CPU computation...\n");
 
-    convolutionRowCPU(h_Buffer, h_Input, h_Filter, imageW, imageH, filter_radius); // convolution kata grammes
-    convolutionColumnCPU(h_OutputCPU, h_Buffer, h_Filter, imageW, imageH, filter_radius); // convolution kata sthles
-
-
+    convolutionRowCPU(h_Buffer, h_Input, h_Filter, imageW, imageH, filter_radius);
+    convolutionColumnCPU(h_OutputCPU, h_Buffer, h_Filter, imageW, imageH, filter_radius);
+    
     // Kanete h sugrish anamesa se GPU kai CPU kai an estw kai kapoio apotelesma xeperna thn akriveia
     // pou exoume orisei, tote exoume sfalma kai mporoume endexomenws na termatisoume to programma mas  
-
-
 
     // free all the allocated memory
     free(h_OutputCPU);
@@ -138,7 +129,6 @@ int main(int argc, char **argv) {
 
     // Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
     // cudaDeviceReset();
-
 
     return 0;
 }
