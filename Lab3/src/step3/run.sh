@@ -3,7 +3,7 @@
 # ================= CONFIGURATION =================
 # Command to run your program. 
 # Change this to your actual executable path (e.g., "./my_solver")
-PROGRAM="./convolution2d"
+PROGRAM="python3 mock_program.py"
 
 # Ask for suffix
 read -p "Enter output directory suffix (optional): " SUFFIX
@@ -15,7 +15,7 @@ else
 fi
 
 START_INPUT=0
-UPPER_LIMIT=15
+UPPER_LIMIT=50
 FIXED_SECOND_INPUT=32
 # =================================================
 
@@ -28,19 +28,25 @@ fi
 echo "Starting execution loop (0 to $UPPER_LIMIT)..."
 
 # Loop from START to UPPER_LIMIT - 1
-for (( i=START_INPUT; i<=UPPER_LIMIT; i++ ))
+for (( i=START_INPUT; i<UPPER_LIMIT; i++ ))
 do
+    # Calculate the actual input value: 2 * i + 1
+    INPUT_VAL=$((2 * i + 1))
+
     # Generate timestamp (YearMonthDay_HourMinuteSecond)
     TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
     
-    # Construct filename: out_<first>_<second>_<timestamp>
-    FILENAME="out_${i}_${FIXED_SECOND_INPUT}_${TIMESTAMP}"
+    # Construct filename using the calculated input value
+    FILENAME="out_${INPUT_VAL}_${FIXED_SECOND_INPUT}_${TIMESTAMP}"
     FILEPATH="${OUTPUT_DIR}/${FILENAME}"
     
-    # Run the program with inputs from stdin and redirect both stdout and stderr to the file
-    echo "$i $FIXED_SECOND_INPUT" | $PROGRAM > "$FILEPATH" 2>&1
+    # Run the program with the calculated input and redirect
+    echo "$INPUT_VAL $FIXED_SECOND_INPUT" | $PROGRAM > "$FILEPATH" 2>&1
     
-    echo "Processed input $i..."
+    # Optional: Print status every 10 runs to avoid clutter
+    if (( i % 10 == 0 )); then
+        echo "Processed iteration $i (Input: $INPUT_VAL)..."
+    fi
 done
 
 echo "Execution complete. Files saved in '$OUTPUT_DIR'."

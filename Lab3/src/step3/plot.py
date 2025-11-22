@@ -114,9 +114,9 @@ def plot_data(x, y_diff, y_digits, second_input_label, suffix_name):
     # --- Graph 1: Max Difference ---
     plt.figure(figsize=(10, 6))
     plt.plot(x, y_diff, 'b-o', markersize=4, linewidth=1)
-    plt.title(f'Max Difference vs Input ({suffix_name})')
-    plt.xlabel('First Input Value')
-    plt.ylabel('Max Difference (Float)')
+    plt.title(f'Max Difference vs Filter Length ({suffix_name})')
+    plt.xlabel('Filter Length')
+    plt.ylabel('Max Difference')
     plt.grid(True, linestyle='--', alpha=0.7)
     
     filename1 = f"max_diff{suffix_str}_{timestamp}.png"
@@ -129,8 +129,8 @@ def plot_data(x, y_diff, y_digits, second_input_label, suffix_name):
     plt.figure(figsize=(10, 6))
     plt.plot(x, y_digits, 'r-s', markersize=4, linewidth=1)
     plt.title(f'Precision vs Input ({suffix_name})')
-    plt.xlabel('First Input Value')
-    plt.ylabel('Decimal Digits (-log10(diff))')
+    plt.xlabel('Filter Length')
+    plt.ylabel('Decimal Digits')
     plt.grid(True, linestyle='--', alpha=0.7)
     
     filename2 = f"decimal_digits{suffix_str}_{timestamp}.png"
