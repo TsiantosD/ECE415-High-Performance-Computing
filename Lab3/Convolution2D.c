@@ -9,10 +9,12 @@
 typedef enum {
     HOST_ALLOC = 1,
     NORMAL = 0
-} errorCode;
+} ErrorCode;
+
+typedef float PixelScalar;
 
 unsigned int filter_radius;
-errorCode exitCode = NORMAL;
+ErrorCode exitCode = NORMAL;
 
 #define FILTER_LENGTH    (2 * filter_radius + 1)
 #define ABS(val)         ((val)<0.0 ? (-(val)) : (val))
@@ -30,14 +32,14 @@ errorCode exitCode = NORMAL;
 ////////////////////////////////////////////////////////////////////////////////
 // Reference row convolution filter
 ////////////////////////////////////////////////////////////////////////////////
-void convolutionRowCPU(float *h_Dst, float *h_Src, float *h_Filter, 
+void convolutionRowCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Filter, 
                        int imageW, int imageH, int filterR) {
 
     int x, y, k;
                       
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
-            float sum = 0;
+            PixelScalar sum = 0;
 
             for (k = -filterR; k <= filterR; k++) {
                 int d = x + k;
@@ -56,14 +58,14 @@ void convolutionRowCPU(float *h_Dst, float *h_Src, float *h_Filter,
 ////////////////////////////////////////////////////////////////////////////////
 // Reference column convolution filter
 ////////////////////////////////////////////////////////////////////////////////
-void convolutionColumnCPU(float *h_Dst, float *h_Src, float *h_Filter,
+void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Filter,
                           int imageW, int imageH, int filterR) {
 
     int x, y, k;
   
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
-            float sum = 0;
+            PixelScalar sum = 0;
 
             for (k = -filterR; k <= filterR; k++) {
                 int d = y + k;
@@ -82,7 +84,7 @@ void convolutionColumnCPU(float *h_Dst, float *h_Src, float *h_Filter,
 // Main program
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
-    float
+    PixelScalar
         *h_Filter,
         *h_Input,
         *h_Buffer,
@@ -106,13 +108,13 @@ int main(int argc, char **argv) {
     printf("Image Width x Height = %i x %i\n\n", imageW, imageH);
     printf("Allocating and initializing host arrays...\n");
 
-    h_Filter    = (float *)malloc(FILTER_LENGTH * sizeof(float));
+    h_Filter    = (PixelScalar *)malloc(FILTER_LENGTH * sizeof(PixelScalar));
     CHECK_ALLOC(h_Filter, CLEANUP0);
-    h_Input     = (float *)malloc(imageW * imageH * sizeof(float));
+    h_Input     = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
     CHECK_ALLOC(h_Input, CLEANUP1);
-    h_Buffer    = (float *)malloc(imageW * imageH * sizeof(float));
+    h_Buffer    = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
     CHECK_ALLOC(h_Buffer, CLEANUP2);
-    h_OutputCPU = (float *)malloc(imageW * imageH * sizeof(float));
+    h_OutputCPU = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
     CHECK_ALLOC(h_OutputCPU, CLEANUP3);
 
     // to 'h_Filter' apotelei to filtro me to opoio ginetai to convolution kai
@@ -122,11 +124,11 @@ int main(int argc, char **argv) {
     srand(200);
 
     for (i = 0; i < FILTER_LENGTH; i++) {
-        h_Filter[i] = (float)(rand() % 16);
+        h_Filter[i] = (PixelScalar)(rand() % 16);
     }
 
     for (i = 0; i < imageW * imageH; i++) {
-        h_Input[i] = (float)rand() / ((float)RAND_MAX / 255) + (float)rand() / (float)RAND_MAX;
+        h_Input[i] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
     }
     // TODO: To parakatw einai to kommati pou ekteleitai sthn CPU kai me vash auto prepei na ginei h sugrish me thn GPU.
 
