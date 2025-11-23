@@ -6,28 +6,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef enum {
-    HOST_ALLOC = 1,
-    DEVICE_ERROR = 2,
-    NORMAL = 0
-} ErrorCode;
-
-typedef float PixelScalar;
-
-unsigned int filter_radius;
-ErrorCode exitCode = NORMAL;
-
 #define FILTER_LENGTH    (2 * filter_radius + 1)
 #define ABS(val)         ((val)<0.0 ? (-(val)) : (val))
 #define accuracy         0.00005 
+#define TILE_WIDTH       32
+#define TILE_HEIGHT      32
 
-#define CHECK_ALLOC_HOST(ptr)          \
-    do {                               \
-        if ((ptr) == NULL) {           \
-            exitCode = HOST_ALLOC;     \
+#define CHECK_ALLOC_HOST(ptr)                        \
+    do {                                             \
+        if ((ptr) == NULL) {                         \
             printf("Allocation failed: %s\n", #ptr); \
-            goto CLEANUP_HOST;         \
-        }                              \
+            cleanUp(HOST_ALLOC);                     \
+        }                                            \
     } while(0)
 
 #define CUDA_CHECK_LAST_ERROR()                                              \
@@ -37,10 +27,53 @@ ErrorCode exitCode = NORMAL;
         if (_err != cudaSuccess) {                                           \
             printf("CUDA Error: %s in %s, line %d\n",                        \
                    cudaGetErrorString(_err), __FILE__, __LINE__);            \
-            exitCode = DEVICE_ERROR;                                         \
-            goto CLEANUP_DEVICE;                                             \
+            cleanUp(DEVICE_ERROR);                                           \
         }                                                                    \
     } while (0)
+
+#define CHECK_SCANF(scanf_call)                                          \
+    do {                                                                 \
+        if ((scanf_call) != 1) {                                         \
+            fprintf(stderr, "Error: invalid scanf input at %s:%d\n",     \
+                    __FILE__, __LINE__);                                 \
+            cleanUp(SCANF);                                              \
+        }                                                                \
+    } while(0)
+
+typedef enum {
+    SCANF = 3,
+    HOST_ALLOC = 1,
+    DEVICE_ERROR = 2,
+    NORMAL = 0
+} ErrorCode;
+
+typedef float PixelScalar;
+unsigned int filter_radius;
+
+PixelScalar
+    *h_Filter = NULL,
+    *h_Input = NULL,
+    *h_Buffer = NULL,
+    *h_OutputCPU = NULL,
+    *h_OutputGPU = NULL,
+    *d_Filter = NULL,
+    *d_Input = NULL,
+    *d_Buffer = NULL,
+    *d_Output = NULL;
+
+void cleanUp(ErrorCode exitCode) {
+    cudaFree(d_Filter);
+    cudaFree(d_Input);
+    cudaFree(d_Buffer);
+    cudaFree(d_Output);
+    free(h_Filter);
+    free(h_Input);
+    free(h_Buffer);
+    free(h_OutputCPU);
+
+    cudaDeviceReset();
+    exit(exitCode);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reference row convolution filter
@@ -100,65 +133,60 @@ __global__ void convolutionRowGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelS
                                int imageW, int imageH, int filterR) {
     int k;
     PixelScalar sum = 0;
-    
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
     for (k = -filterR; k <= filterR; k++) {
-        int d = threadIdx.x + k;
+        int d = x + k;
 
         if (d >= 0 && d < imageW)
-            sum += d_Src[threadIdx.y * imageW + d] * d_Filter[filterR - k];
+            sum += d_Src[y * imageW + d] * d_Filter[filterR - k];
     }
 
-    d_Dst[threadIdx.y * imageW + threadIdx.x] = sum;
+    d_Dst[y * imageW + x] = sum;
 }
 
 __global__ void convolutionColumnGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelScalar *d_Filter,
                                int imageW, int imageH, int filterR) {
     int k;
     PixelScalar sum = 0;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
     
     for (k = -filterR; k <= filterR; k++) {
-        int d = threadIdx.y + k;
+        int d = y + k;
 
         if (d >= 0 && d < imageH)
-            sum += d_Src[d * imageW + threadIdx.x] * d_Filter[filterR - k];
+            sum += d_Src[d * imageW + x] * d_Filter[filterR - k];
     }
 
-    d_Dst[threadIdx.y * imageW + threadIdx.x] = sum;
+    d_Dst[y * imageW + x] = sum;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Main program
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv) {
-    PixelScalar
-        *h_Filter = NULL,
-        *h_Input = NULL,
-        *h_Buffer = NULL,
-        *h_OutputCPU = NULL,
-        *h_OutputGPU = NULL,
-        *d_Filter = NULL,
-        *d_Input = NULL,
-        *d_Buffer = NULL,
-        *d_Output = NULL;
-
     int imageW;
     int imageH;
     unsigned int i;
     int correctOutput = 1;
-    float maxDiff = 0;
-    dim3 dimGrid(1);
-  
+    PixelScalar maxDiff = 0;
+    
     printf("Enter filter radius : ");
-    scanf("%d", &filter_radius);
-
+    CHECK_SCANF(scanf("%d", &filter_radius));
+    
     // Ta imageW, imageH ta dinei o xrhsths kai thewroume oti einai isa,
     // dhladh imageW = imageH = N, opou to N to dinei o xrhsths.
     // Gia aplothta thewroume tetragwnikes eikones.     
-
+    
     printf("Enter image size. Should be a power of two and greater than %d : ", FILTER_LENGTH);
-    scanf("%d", &imageW);
+    CHECK_SCANF(scanf("%d", &imageW));
     imageH = imageW;
-    dim3 dimBlock(imageW, imageH);
+
+    //TODO: Check if this is it 100%
+    dim3 dimGrid((imageW  + TILE_WIDTH  - 1)  / TILE_WIDTH, (imageH  + TILE_HEIGHT - 1) / TILE_HEIGHT);
+    dim3 dimBlock(TILE_WIDTH, TILE_HEIGHT);
 
     printf("Image Width x Height = %i x %i\n\n", imageW, imageH);
     printf("Allocating and initializing host arrays...\n");
@@ -182,9 +210,7 @@ int main(int argc, char **argv) {
     cudaMalloc((void **) &d_Output, imageW * imageH * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
 
-    // to 'h_Filter' apotelei to filtro me to opoio ginetai to convolution kai
-    // arxikopoieitai tuxaia. To 'h_Input' einai h eikona panw sthn opoia ginetai
-    // to convolution kai arxikopoieitai kai auth tuxaia.
+    //* Initialise random arrays
 
     srand(200);
 
@@ -196,7 +222,7 @@ int main(int argc, char **argv) {
         h_Input[i] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
     }
 
-    // Copy h_Filter and h_Input to GPU
+    //* Copy h_Filter and h_Input to GPU
     cudaMemcpy(d_Filter, h_Filter, FILTER_LENGTH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
     cudaMemcpy(d_Input, h_Input, imageW * imageH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
@@ -206,39 +232,30 @@ int main(int argc, char **argv) {
     convolutionRowGPU<<<dimGrid, dimBlock>>>(d_Buffer, d_Input, d_Filter, imageW, imageH, filter_radius);
     cudaDeviceSynchronize();
     convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Output, d_Buffer, d_Filter, imageW, imageH, filter_radius);
-    cudaDeviceSynchronize(); // TODO: Remove
 
-    // To parakatw einai to kommati pou ekteleitai sthn CPU kai me vash auto prepei na ginei h sugrish me thn GPU.
+    //! 'Fall through' Let Host run concurrently with Device
+
     printf("CPU computation...\n");
     convolutionRowCPU(h_Buffer, h_Input, h_Filter, imageW, imageH, filter_radius);
     convolutionColumnCPU(h_OutputCPU, h_Buffer, h_Filter, imageW, imageH, filter_radius);
 
-    // After completing CPU computation wait for GPU and check for errors
+    //* Transfer data from Device back to Host memory
     CUDA_CHECK_LAST_ERROR();
     cudaMemcpy(h_OutputGPU, d_Output, imageW * imageH * sizeof(PixelScalar), cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
-
-    // Kanete h sugrish anamesa se GPU kai CPU kai an estw kai kapoio apotelesma xeperna thn akriveia
-    // pou exoume orisei, tote exoume sfalma kai mporoume endexomenws na termatisoume to programma mas  
-
-    // for (int i = 0; i < imageH; i++) {
-    //     for (int j = 0; j < imageW; j++) {
-    //         printf("%12.5f ", *(h_OutputCPU + i * imageW + j));
-    //     }
-    //     printf("\n");
-    // }
     
+    //* Perform comparison between GPU / CPU results
     for (int y = 0; y < imageH; y++) {
         for (int x = 0; x < imageW; x++) {
             int index = y * imageW + x;
-            float diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
+            PixelScalar diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
             maxDiff = diff > maxDiff ? diff : maxDiff;
 
             if (diff > accuracy) {
-		correctOutput = 0;
-                printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
-                printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
-                printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
+		        correctOutput = 0;
+                // printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
+                // printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
+                // printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
             }
         }
     }
@@ -246,22 +263,10 @@ int main(int argc, char **argv) {
     if (correctOutput)
         printf("Results correct!\n");
 
-    printf("Max difference: %f\n", maxDiff);
-
-    // Cleanup sequence
-    CLEANUP_DEVICE:
-    cudaFree(d_Filter);
-    cudaFree(d_Input);
-    cudaFree(d_Buffer);
-    cudaFree(d_Output);
-    CLEANUP_HOST:
-    free(h_Filter);
-    free(h_Input);
-    free(h_Buffer);
-    free(h_OutputCPU);
+    printf("Max difference: %.15lf\n", maxDiff); //TODO: Redo tests for double precision with .15 digits printed
 
     // Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
-    cudaDeviceReset();
+    cleanUp(NORMAL);
 
-    return exitCode;
+    return NORMAL;
 }
