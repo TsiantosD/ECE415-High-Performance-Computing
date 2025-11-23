@@ -257,7 +257,7 @@ int main(int argc, char **argv) {
 
             if (diff > accuracy) {
 		        correctOutput = 0;
-                break;
+                
             }
         }
     }
@@ -265,7 +265,7 @@ int main(int argc, char **argv) {
     if (correctOutput)
         printf("Results correct!\n");
 
-    printf("Time in GPU: %f\n", timer.Elapsed());
+    printf("Time in GPU: %f\n", timer.Elapsed()/1000);
     printf("Time in CPU: %lf\n", (double) (tv2.tv_nsec - tv1.tv_nsec) / 1.0E9 + (double) (tv2.tv_sec - tv1.tv_sec));
 
     // Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
