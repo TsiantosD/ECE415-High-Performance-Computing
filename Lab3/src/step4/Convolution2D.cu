@@ -9,6 +9,8 @@
 #define FILTER_LENGTH    (2 * filter_radius + 1)
 #define ABS(val)         ((val)<0.0 ? (-(val)) : (val))
 #define accuracy         0.00005 
+#define TILE_WIDTH       32
+#define TILE_HEIGHT      32
 
 #define CHECK_ALLOC_HOST(ptr)                        \
     do {                                             \
@@ -45,7 +47,7 @@ typedef enum {
     NORMAL = 0
 } ErrorCode;
 
-typedef double PixelScalar;
+typedef float PixelScalar;
 unsigned int filter_radius;
 
 PixelScalar
@@ -131,30 +133,34 @@ __global__ void convolutionRowGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelS
                                int imageW, int imageH, int filterR) {
     int k;
     PixelScalar sum = 0;
-    
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
     for (k = -filterR; k <= filterR; k++) {
-        int d = threadIdx.x + k;
+        int d = x + k;
 
         if (d >= 0 && d < imageW)
-            sum += d_Src[threadIdx.y * imageW + d] * d_Filter[filterR - k];
+            sum += d_Src[y * imageW + d] * d_Filter[filterR - k];
     }
 
-    d_Dst[threadIdx.y * imageW + threadIdx.x] = sum;
+    d_Dst[y * imageW + x] = sum;
 }
 
 __global__ void convolutionColumnGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelScalar *d_Filter,
                                int imageW, int imageH, int filterR) {
     int k;
     PixelScalar sum = 0;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
     
     for (k = -filterR; k <= filterR; k++) {
-        int d = threadIdx.y + k;
+        int d = y + k;
 
         if (d >= 0 && d < imageH)
-            sum += d_Src[d * imageW + threadIdx.x] * d_Filter[filterR - k];
+            sum += d_Src[d * imageW + x] * d_Filter[filterR - k];
     }
 
-    d_Dst[threadIdx.y * imageW + threadIdx.x] = sum;
+    d_Dst[y * imageW + x] = sum;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -179,8 +185,8 @@ int main(int argc, char **argv) {
     imageH = imageW;
 
     //TODO: Check if this is it 100%
-    dim3 dimGrid(1);
-    dim3 dimBlock(imageW, imageH);
+    dim3 dimGrid((imageW  + TILE_WIDTH  - 1)  / TILE_WIDTH, (imageH  + TILE_HEIGHT - 1) / TILE_HEIGHT);
+    dim3 dimBlock(TILE_WIDTH, TILE_HEIGHT);
 
     printf("Image Width x Height = %i x %i\n\n", imageW, imageH);
     printf("Allocating and initializing host arrays...\n");
