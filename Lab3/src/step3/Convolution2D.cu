@@ -92,12 +92,11 @@ void convolutionRowCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Fi
             for (k = -filterR; k <= filterR; k++) {
                 int d = x + k;
 
-                if (d >= 0 && d < imageW) {
+                if (d >= 0 && d < imageW)
                     sum += h_Src[y * imageW + d] * h_Filter[filterR - k];
-                }     
-
-                h_Dst[y * imageW + x] = sum; //TODO: Move outside loop
             }
+
+            h_Dst[y * imageW + x] = sum;
         }
     }
 }
@@ -118,12 +117,11 @@ void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h
             for (k = -filterR; k <= filterR; k++) {
                 int d = y + k;
 
-                if (d >= 0 && d < imageH) {
+                if (d >= 0 && d < imageH)
                     sum += h_Src[d * imageW + x] * h_Filter[filterR - k];
-                }
- 
-                h_Dst[y * imageW + x] = sum; //TODO: Move outside loop
             }
+
+            h_Dst[y * imageW + x] = sum;
         }
     }
 }
@@ -182,7 +180,6 @@ int main(int argc, char **argv) {
     CHECK_SCANF(scanf("%d", &imageW));
     imageH = imageW;
 
-    //TODO: Check if this is it 100%
     dim3 dimGrid(1);
     dim3 dimBlock(imageW, imageH);
 

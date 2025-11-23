@@ -94,12 +94,11 @@ void convolutionRowCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Fi
             for (k = -filterR; k <= filterR; k++) {
                 int d = x + k;
 
-                if (d >= 0 && d < imageW) {
+                if (d >= 0 && d < imageW)
                     sum += h_Src[y * imageW + d] * h_Filter[filterR - k];
-                }     
-
-                h_Dst[y * imageW + x] = sum; //TODO: Move outside loop
             }
+
+            h_Dst[y * imageW + x] = sum;
         }
     }
 }
@@ -120,12 +119,11 @@ void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h
             for (k = -filterR; k <= filterR; k++) {
                 int d = y + k;
 
-                if (d >= 0 && d < imageH) {
+                if (d >= 0 && d < imageH)
                     sum += h_Src[d * imageW + x] * h_Filter[filterR - k];
-                }
- 
-                h_Dst[y * imageW + x] = sum; //TODO: Move outside loop
             }
+
+            h_Dst[y * imageW + x] = sum;
         }
     }
 }
@@ -188,7 +186,6 @@ int main(int argc, char **argv) {
     CHECK_SCANF(scanf("%d", &imageW));
     imageH = imageW;
 
-    //TODO: Check if this is it 100%
     dim3 dimGrid((imageW  + TILE_WIDTH  - 1)  / TILE_WIDTH, (imageH  + TILE_HEIGHT - 1) / TILE_HEIGHT);
     dim3 dimBlock(TILE_WIDTH, TILE_HEIGHT);
 
@@ -257,9 +254,7 @@ int main(int argc, char **argv) {
 
             if (diff > accuracy) {
 		        correctOutput = 0;
-                // printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
-                // printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
-                // printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
+                break;
             }
         }
     }
@@ -267,7 +262,7 @@ int main(int argc, char **argv) {
     if (correctOutput)
         printf("Results correct!\n");
 
-    printf("Max difference: %.15lf\n", maxDiff); //TODO: Redo tests for double precision with .15 digits printed
+    printf("Max difference: %.15lf\n", maxDiff);
 
     // Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
     cleanUp(NORMAL);
