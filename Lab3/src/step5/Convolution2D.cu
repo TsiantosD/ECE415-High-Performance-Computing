@@ -255,16 +255,15 @@ int main(int argc, char **argv) {
             PixelScalar diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
             maxDiff = diff > maxDiff ? diff : maxDiff;
 
-            if (diff > accuracy) {
+            if (diff > accuracy)
 		        correctOutput = 0;
-                
-            }
         }
     }
 
     if (correctOutput)
         printf("Results correct!\n");
 
+    printf("Max difference: %.15lf\n", maxDiff);
     printf("Time in GPU: %f\n", timer.Elapsed()/1000);
     printf("Time in CPU: %lf\n", (double) (tv2.tv_nsec - tv1.tv_nsec) / 1.0E9 + (double) (tv2.tv_sec - tv1.tv_sec));
 
