@@ -1,2 +1,5 @@
 *convolution2d
-.vscode
+*.vscode/
+*venv/
+*output*/
+*plots/

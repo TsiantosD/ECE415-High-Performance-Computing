@@ -45,7 +45,11 @@ typedef enum {
     NORMAL = 0
 } ErrorCode;
 
+#ifdef USE_DOUBLES
 typedef double PixelScalar;
+#else
+typedef float PixelScalar;
+#endif
 unsigned int filter_radius;
 
 PixelScalar

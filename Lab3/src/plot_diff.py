@@ -62,7 +62,7 @@ def parse_results(current_output_dir):
                     if value > 0:
                         digits = math.ceil(-math.log10(value)) - 1
                     else:
-                        digits = 7 # Cap for 0 difference (infinite precision)
+                        digits = 7 if "dbl" not in current_output_dir else 15 # Cap for 0 difference (infinite precision)
                         
                     data_points.append({
                         'x': first_input,
@@ -94,20 +94,18 @@ def parse_results(current_output_dir):
     print(f"Found {len(inputs_x)} valid data files.")
     return inputs_x, max_diffs_y, decimal_digits_y, second_input_label
 
-def plot_data(x, y_diff, y_digits, second_input_label, suffix_name):
+def plot_data(x, y_diff, y_digits, suffix_name, batch_dir_name):
     """Generates two separate plot files with timestamps."""
     
     if not x:
         print("No data found to plot.")
         return
 
-    # Create plots directory if needed
-    if not os.path.exists(PLOTS_DIR):
-        os.makedirs(PLOTS_DIR)
-        print(f"Created directory: {PLOTS_DIR}")
-
-    # Generate timestamp for unique filenames
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Create directory if needed
+    final_dir = os.path.join(PLOTS_DIR, batch_dir_name)
+    if not os.path.exists(final_dir):
+        os.makedirs(final_dir)
+        print(f"Created directory: {final_dir}")
     
     suffix_str = f"_{suffix_name}" if suffix_name else ""
 
@@ -119,8 +117,8 @@ def plot_data(x, y_diff, y_digits, second_input_label, suffix_name):
     plt.ylabel('Max Difference')
     plt.grid(True, linestyle='--', alpha=0.7)
     
-    filename1 = f"max_diff{suffix_str}_{timestamp}.png"
-    filepath1 = os.path.join(PLOTS_DIR, filename1)
+    filename1 = f"max_diff{suffix_str}.png"
+    filepath1 = os.path.join(final_dir, filename1)
     plt.savefig(filepath1)
     print(f"Saved plot 1: {filepath1}")
     plt.close() # Clear memory
@@ -133,15 +131,15 @@ def plot_data(x, y_diff, y_digits, second_input_label, suffix_name):
     plt.ylabel('Decimal Digits')
     plt.grid(True, linestyle='--', alpha=0.7)
     
-    filename2 = f"decimal_digits{suffix_str}_{timestamp}.png"
-    filepath2 = os.path.join(PLOTS_DIR, filename2)
+    filename2 = f"decimal_digits{suffix_str}.png"
+    filepath2 = os.path.join(final_dir, filename2)
     plt.savefig(filepath2)
     print(f"Saved plot 2: {filepath2}")
     plt.close() # Clear memory
 
 if __name__ == "__main__":
     # Find all directories starting with "output"
-    dirs = [d for d in os.listdir('.') if os.path.isdir(d) and d.startswith('output')]
+    dirs = [d for d in os.listdir('output')] if 'output' in os.listdir('.') else []
     
     if not dirs:
         print("No 'output' directories found.")
@@ -149,15 +147,27 @@ if __name__ == "__main__":
         print(f"Found directories: {dirs}")
     
     for d in dirs:
-        # Extract suffix for labeling
-        # output_test -> test
-        # output -> default
-        if '_' in d:
-            current_suffix = d.split('_', 1)[1]
-        else:
-            current_suffix = "default"
+        current_suffix = d
+        full_path = os.path.join('output', d)
 
-        print(f"\nProcessing directory: {d}")
-        x_data, diff_data, digits_data, sec_label = parse_results(d)
-        if x_data:
-            plot_data(x_data, diff_data, digits_data, sec_label, current_suffix)
+        try:
+            subdirs = [s for s in os.listdir(full_path) if os.path.isdir(os.path.join(full_path, s))]
+        except OSError:
+            print(f"Could not access {d}")
+            continue
+
+        if not subdirs:
+            print(f"No timestamp subdirectories found in {d}")
+            continue
+        
+        # Sort to handle them in chronological order if named by timestamp
+        subdirs.sort()
+
+        for batch_dir_name in subdirs:
+            full_batch_path = os.path.join(full_path, batch_dir_name)
+            print(f"\nProcessing batch: {batch_dir_name} inside {full_path}")
+            
+            x_data, diff_data, digits_data, sec_label = parse_results(full_batch_path)
+            if x_data:
+                # Pass the folder name (batch_dir_name) to be used in the filename
+                plot_data(x_data, diff_data, digits_data, current_suffix, os.path.join(d, batch_dir_name))

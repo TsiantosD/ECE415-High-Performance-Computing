@@ -15,9 +15,12 @@ SRC := Convolution2D.cu
 # Flags Configuration
 # ------------------------------------------
 
+# Set FMAD to true if not defined on the command line
+FMAD ?= true
+
 # Standard Compilation Flags
-# -fmad=false This prevents fp precision loss
-COMMON_FLAGS := -O4 -fmad=false 
+# Note: Use FMAD=false to prevent fp precision loss if needed
+COMMON_FLAGS := -O4 -fmad=$(FMAD)
 
 # Debugging Flags
 DEBUG_FLAGS := -g -G
