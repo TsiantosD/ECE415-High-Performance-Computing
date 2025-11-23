@@ -33,32 +33,45 @@ def collect_data(output_dir, step_name):
     """Scans step directories and collects execution data."""
     data = []
     
-    # Check if the step directory exists
     step_path = os.path.join(output_dir, step_name)
     if not os.path.isdir(step_path):
         print(f"Warning: Directory '{step_path}' not found. Skipping.")
         return data
 
-    # 1. Iterate through executable subdirectories (e.g., step5, step5_dbl)
-    for exec_dir_name in os.listdir(step_path):
-        exec_path = os.path.join(step_path, exec_dir_name)
-        if not os.path.isdir(exec_path):
+    # Find ALL subdirectories under step_path (e.g., '20251123_234518' or 'step5_dbl')
+    for first_level_dir in os.listdir(step_path):
+        first_level_path = os.path.join(step_path, first_level_dir)
+        if not os.path.isdir(first_level_path):
             continue
             
-        # 2. Iterate through timestamp subdirectories
-        for timestamp_dir_name in os.listdir(exec_path):
-            timestamp_path = os.path.join(exec_path, timestamp_dir_name)
-            if not os.path.isdir(timestamp_path):
-                continue
-                
-            # 3. Iterate through output files
+        # Determine the paths to check for log files
+        timestamp_dirs_to_check = []
+        
+        # Case 1: The subdirectory IS the timestamp directory (Your structure)
+        # We can check if the directory name looks like a timestamp (e.g., starts with 20 and has 8 digits)
+        if re.match(r'^\d{8}_\d{6}$', first_level_dir):
+            timestamp_dirs_to_check.append(first_level_path)
+            # Use the step name itself as the executable/suffix identifier for this plot
+            exec_name = step_name
+        
+        # Case 2: The subdirectory is the executable/suffix directory (Script's original assumption)
+        else:
+            # We assume first_level_dir is the executable name (e.g., step5_dbl)
+            exec_name = first_level_dir
+            # Check for timestamp directories inside this path
+            for sub_dir in os.listdir(first_level_path):
+                if re.match(r'^\d{8}_\d{6}$', sub_dir):
+                    timestamp_dirs_to_check.append(os.path.join(first_level_path, sub_dir))
+
+        # 3. Iterate through all identified timestamp directories
+        for timestamp_path in timestamp_dirs_to_check:
+            # Check if this path actually holds log files
             for filename in os.listdir(timestamp_path):
                 if not filename.startswith('out_'):
                     continue
                 
                 match = FILENAME_REGEX.match(filename)
                 if not match:
-                    # Skip files that don't match the expected output format
                     continue
 
                 kernel_length = int(match.group(1))
@@ -76,7 +89,7 @@ def collect_data(output_dir, step_name):
                         'image_size': image_size,
                         'gpu_time': gpu_time,
                         'cpu_time': cpu_time,
-                        'executable': exec_dir_name # Used for detailed analysis if needed
+                        'executable': exec_name
                     })
     
     return data
@@ -100,9 +113,11 @@ def generate_plots(df, step_names):
     for kernel, group in df.groupby('kernel_length'):
         # We need to sort by image_size for a proper line plot
         group_sorted = group.sort_values(by='image_size')
+        
+        # Plot Time in MS (Multiply by 1000)
         plt.plot(
             group_sorted['image_size'], 
-            group_sorted['gpu_time'], 
+            group_sorted['gpu_time'] * 1000, # <-- CHANGED TO MS
             marker='o', 
             linestyle='-',
             label=f'Kernel Length: {kernel}'
@@ -110,7 +125,7 @@ def generate_plots(df, step_names):
 
     plt.title(f'{title_prefix}: GPU Execution Time vs. Image Size')
     plt.xlabel('Image Size (N)')
-    plt.ylabel('Time in GPU (seconds)')
+    plt.ylabel('Time in GPU (milliseconds)') # <-- CHANGED LABEL
     plt.xticks(sorted(df['image_size'].unique())) # Ensure all discrete sizes are shown
     plt.grid(True, which='both', linestyle='--')
     plt.legend(title='Filter Configuration')
@@ -125,9 +140,11 @@ def generate_plots(df, step_names):
     
     for kernel, group in df.groupby('kernel_length'):
         group_sorted = group.sort_values(by='image_size')
+        
+        # Plot Time in MS (Multiply by 1000)
         plt.plot(
             group_sorted['image_size'], 
-            group_sorted['cpu_time'], 
+            group_sorted['cpu_time'] * 1000, # <-- CHANGED TO MS
             marker='x', 
             linestyle='--',
             label=f'Kernel Length: {kernel}'
@@ -135,7 +152,7 @@ def generate_plots(df, step_names):
 
     plt.title(f'{title_prefix}: CPU Execution Time vs. Image Size')
     plt.xlabel('Image Size (N)')
-    plt.ylabel('Time in CPU (seconds)')
+    plt.ylabel('Time in CPU (milliseconds)') # <-- CHANGED LABEL
     plt.xticks(sorted(df['image_size'].unique()))
     plt.grid(True, which='both', linestyle='--')
     plt.legend(title='Filter Configuration')
@@ -162,6 +179,6 @@ if __name__ == '__main__':
         
         # Aggregate data if multiple identical runs exist (e.g., from --repeat mode or multiple runs)
         # We use the mean time for simplicity across identical (kernel, size) pairs.
-        df_agg = df.groupby(['kernel_length', 'image_size']).mean().reset_index()
+        df_agg = df.groupby(['kernel_length', 'image_size']).mean(numeric_only=True).reset_index()
         
         generate_plots(df_agg, TARGET_STEPS)
