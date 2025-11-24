@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "gputimer.h"
 
 #define FILTER_LENGTH    (2 * filter_radius + 1)
 #define ABS(val)         ((val)<0.0 ? (-(val)) : (val))
@@ -47,11 +48,14 @@ typedef enum {
     NORMAL = 0
 } ErrorCode;
 
-#ifdef USE_DOUBLES
+#if USE_DOUBLES == 1
 typedef double PixelScalar;
-#else
+#elif USE_DOUBLES == 0
 typedef float PixelScalar;
+#else
+#error "USE_DOUBLES must be 0 or 1"
 #endif
+
 unsigned int filter_radius;
 
 PixelScalar
@@ -62,14 +66,12 @@ PixelScalar
     *h_OutputGPU = NULL,
     *d_Filter = NULL,
     *d_Input = NULL,
-    *d_Buffer = NULL,
-    *d_Output = NULL;
+    *d_Buffer = NULL;
 
 void cleanUp(ErrorCode exitCode) {
     cudaFree(d_Filter);
     cudaFree(d_Input);
     cudaFree(d_Buffer);
-    cudaFree(d_Output);
     free(h_Filter);
     free(h_Input);
     free(h_Buffer);
@@ -79,6 +81,31 @@ void cleanUp(ErrorCode exitCode) {
     exit(exitCode);
 }
 
+void cudaTransferPadded (int xPad, int yPad, PixelScalar *device, PixelScalar *host, int arrayWidth, int arrayHeight, cudaMemcpyKind kind) {
+    //* Skips top padding
+    //? General vars
+    int paddedRow = (xPad << 1) + arrayWidth;
+    int startOffset = (paddedRow * yPad) + xPad;
+    //? Incrementing pointers (only device padded)
+    PixelScalar *curRowStartD = device + startOffset;
+    PixelScalar *curRowStartH = host;
+    printf("xPad: %d, yPad: %d, width: %d\n", xPad, yPad, arrayWidth);
+    for (int i = 0; i < arrayHeight; i++) {
+        //TODO: maybe replace with async and check error once at the end of for
+        printf("Device index: [%d]\n", (int) (curRowStartD - device));
+        printf("Device dims: [%d][%d]\n", (int) (curRowStartD - device) % paddedRow, (int) (curRowStartD - device) / paddedRow);
+        if (kind == cudaMemcpyHostToDevice) {
+            cudaMemcpy(curRowStartD, curRowStartH, arrayWidth * sizeof(PixelScalar), kind); 
+        } else {
+            cudaMemcpy(curRowStartH, curRowStartD, arrayWidth * sizeof(PixelScalar), kind); 
+        }
+        // CUDA_CHECK_LAST_ERROR(); //! check outside of function
+        curRowStartD += (xPad << 1) + arrayWidth;  //* Skips side padding
+        curRowStartH += arrayWidth; //* Go next line on host
+    }
+    printf("-------------------------------------");
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Reference row convolution filter
 ////////////////////////////////////////////////////////////////////////////////
@@ -86,7 +113,8 @@ void convolutionRowCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Fi
                        int imageW, int imageH, int filterR) {
 
     int x, y, k;
-                      
+    
+    #pragma omp parallel for private(x, y, k)
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
             PixelScalar sum = 0;
@@ -111,7 +139,8 @@ void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h
                           int imageW, int imageH, int filterR) {
 
     int x, y, k;
-  
+
+    #pragma omp parallel for private(x, y, k)
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
             PixelScalar sum = 0;
@@ -135,14 +164,13 @@ __global__ void convolutionRowGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelS
                                int imageW, int imageH, int filterR) {
     int k;
     PixelScalar sum = 0;
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int x = blockIdx.x * blockDim.x + threadIdx.x + filterR;
+    int y = blockIdx.y * blockDim.y + threadIdx.y + filterR;
 
     for (k = -filterR; k <= filterR; k++) {
         int d = x + k;
 
-        if (d >= 0 && d < imageW)
-            sum += d_Src[y * imageW + d] * d_Filter[filterR - k];
+        sum += d_Src[y * imageW + d] * d_Filter[filterR - k];
     }
 
     d_Dst[y * imageW + x] = sum;
@@ -152,14 +180,13 @@ __global__ void convolutionColumnGPU(PixelScalar *d_Dst, PixelScalar *d_Src, Pix
                                int imageW, int imageH, int filterR) {
     int k;
     PixelScalar sum = 0;
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int x = blockIdx.x * blockDim.x + threadIdx.x + filterR;
+    int y = blockIdx.y * blockDim.y + threadIdx.y + filterR;
     
     for (k = -filterR; k <= filterR; k++) {
         int d = y + k;
 
-        if (d >= 0 && d < imageH)
-            sum += d_Src[d * imageW + x] * d_Filter[filterR - k];
+        sum += d_Src[d * imageW + x] * d_Filter[filterR - k];
     }
 
     d_Dst[y * imageW + x] = sum;
@@ -174,10 +201,14 @@ int main(int argc, char **argv) {
     unsigned int i;
     int correctOutput = 1;
     PixelScalar maxDiff = 0;
+	struct timespec  tv1, tv2;
+    int imagePad = 0;
     
+    printf("Using scalar with sizeof: %lubytes\n", sizeof(PixelScalar));
+
     printf("Enter filter radius : ");
     CHECK_SCANF(scanf("%d", &filter_radius));
-    
+    imagePad = filter_radius;
     // Ta imageW, imageH ta dinei o xrhsths kai thewroume oti einai isa,
     // dhladh imageW = imageH = N, opou to N to dinei o xrhsths.
     // Gia aplothta thewroume tetragwnikes eikones.     
@@ -204,47 +235,84 @@ int main(int argc, char **argv) {
     CHECK_ALLOC_HOST(h_OutputGPU);
     cudaMalloc((void **) &d_Filter, FILTER_LENGTH * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc((void **) &d_Input, imageW * imageH * sizeof(PixelScalar));
+    cudaMalloc((void **) &d_Input, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc((void **) &d_Buffer, imageW * imageH * sizeof(PixelScalar));
-    CUDA_CHECK_LAST_ERROR();
-    cudaMalloc((void **) &d_Output, imageW * imageH * sizeof(PixelScalar));
+    cudaMalloc((void **) &d_Buffer, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
 
+    //* Set cuda memory to 0 for padding just in case
+    cudaMemset(d_Input, 0, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
+    CUDA_CHECK_LAST_ERROR();
+    cudaMemset(d_Buffer, 0, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
+    CUDA_CHECK_LAST_ERROR();
+    
     //* Initialise random arrays
-
     srand(200);
 
     for (i = 0; i < FILTER_LENGTH; i++) {
         h_Filter[i] = (PixelScalar)(rand() % 16);
     }
 
-    for (i = 0; i < imageW * imageH; i++) {
-        h_Input[i] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            h_Input[i * imageW + j] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
+        }
     }
 
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            printf("%12.5f ", *(h_Input + i * imageW + j));
+        }
+        printf("\n");
+    }
+
+    GpuTimer timer = GpuTimer();
+    timer.Start();
+    
     //* Copy h_Filter and h_Input to GPU
     cudaMemcpy(d_Filter, h_Filter, FILTER_LENGTH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_Input, h_Input, imageW * imageH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
+
+    cudaTransferPadded(imagePad, imagePad, d_Input, h_Input, imageW, imageH, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
+
     
     printf("GPU computation...\n");
     convolutionRowGPU<<<dimGrid, dimBlock>>>(d_Buffer, d_Input, d_Filter, imageW, imageH, filter_radius);
     cudaDeviceSynchronize();
-    convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Output, d_Buffer, d_Filter, imageW, imageH, filter_radius);
-
-    //! 'Fall through' Let Host run concurrently with Device
-
-    printf("CPU computation...\n");
-    convolutionRowCPU(h_Buffer, h_Input, h_Filter, imageW, imageH, filter_radius);
-    convolutionColumnCPU(h_OutputCPU, h_Buffer, h_Filter, imageW, imageH, filter_radius);
+    convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Input, d_Buffer, d_Filter, imageW, imageH, filter_radius);
+    cudaDeviceSynchronize();
 
     //* Transfer data from Device back to Host memory
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(h_OutputGPU, d_Output, imageW * imageH * sizeof(PixelScalar), cudaMemcpyDeviceToHost);
+    cudaTransferPadded(imagePad, imagePad, d_Input, h_OutputGPU, imageW, imageH, cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
+    timer.Stop();
+
+    printf("CPU computation...\n");
+	clock_gettime(CLOCK_MONOTONIC_RAW, &tv1);
+    convolutionRowCPU(h_Buffer, h_Input, h_Filter, imageW, imageH, filter_radius);
+    convolutionColumnCPU(h_OutputCPU, h_Buffer, h_Filter, imageW, imageH, filter_radius);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &tv2);
+
     
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            printf("%12.5f ", *(h_OutputCPU + i * imageW + j));
+        }
+        printf("\n");
+    }
+    printf("\n");
+    printf("\n");
+    printf("\n");
+
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            printf("%12.5f ", *(h_OutputGPU + i * imageW + j));
+        }
+        printf("\n");
+    }
+
     //* Perform comparison between GPU / CPU results
     for (int y = 0; y < imageH; y++) {
         for (int x = 0; x < imageW; x++) {
@@ -253,8 +321,11 @@ int main(int argc, char **argv) {
             maxDiff = diff > maxDiff ? diff : maxDiff;
 
             if (diff > accuracy) {
+                //TODO: remove this and make it break whenever this is true
+                // printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
+                // printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
+                // printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
 		        correctOutput = 0;
-                break;
             }
         }
     }
@@ -263,6 +334,8 @@ int main(int argc, char **argv) {
         printf("Results correct!\n");
 
     printf("Max difference: %.15lf\n", maxDiff);
+    printf("Time in GPU: %f\n", timer.Elapsed()/1000);
+    printf("Time in CPU: %lf\n", (double) (tv2.tv_nsec - tv1.tv_nsec) / 1.0E9 + (double) (tv2.tv_sec - tv1.tv_sec));
 
     // Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
     cleanUp(NORMAL);

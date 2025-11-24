@@ -10,8 +10,8 @@
 #define FILTER_LENGTH    (2 * filter_radius + 1)
 #define ABS(val)         ((val)<0.0 ? (-(val)) : (val))
 #define accuracy         0.00005 
-#define TILE_WIDTH       32
-#define TILE_HEIGHT      32
+#define BLOCK_WIDTH       32
+#define BLOCK_HEIGHT      32
 
 #define CHECK_ALLOC_HOST(ptr)                        \
     do {                                             \
@@ -61,12 +61,14 @@ unsigned int filter_radius;
 PixelScalar
     *h_Filter = NULL,
     *h_Input = NULL,
+    *h_InputPadded = NULL,
     *h_Buffer = NULL,
     *h_OutputCPU = NULL,
     *h_OutputGPU = NULL,
     *d_Filter = NULL,
     *d_Input = NULL,
-    *d_Buffer = NULL;
+    *d_Buffer = NULL,
+    *d_Output = NULL;
 
 void cleanUp(ErrorCode exitCode) {
     cudaFree(d_Filter);
@@ -81,31 +83,6 @@ void cleanUp(ErrorCode exitCode) {
     exit(exitCode);
 }
 
-void cudaTransferPadded (int xPad, int yPad, PixelScalar *device, PixelScalar *host, int arrayWidth, int arrayHeight, cudaMemcpyKind kind) {
-    //* Skips top padding
-    //? General vars
-    int paddedRow = (xPad << 1) + arrayWidth;
-    int startOffset = (paddedRow * yPad) + xPad;
-    //? Incrementing pointers (only device padded)
-    PixelScalar *curRowStartD = device + startOffset;
-    PixelScalar *curRowStartH = host;
-    printf("xPad: %d, yPad: %d, width: %d\n", xPad, yPad, arrayWidth);
-    for (int i = 0; i < arrayHeight; i++) {
-        //TODO: maybe replace with async and check error once at the end of for
-        printf("Device index: [%d]\n", (int) (curRowStartD - device));
-        printf("Device dims: [%d][%d]\n", (int) (curRowStartD - device) % paddedRow, (int) (curRowStartD - device) / paddedRow);
-        if (kind == cudaMemcpyHostToDevice) {
-            cudaMemcpy(curRowStartD, curRowStartH, arrayWidth * sizeof(PixelScalar), kind); 
-        } else {
-            cudaMemcpy(curRowStartH, curRowStartD, arrayWidth * sizeof(PixelScalar), kind); 
-        }
-        // CUDA_CHECK_LAST_ERROR(); //! check outside of function
-        curRowStartD += (xPad << 1) + arrayWidth;  //* Skips side padding
-        curRowStartH += arrayWidth; //* Go next line on host
-    }
-    printf("-------------------------------------");
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // Reference row convolution filter
 ////////////////////////////////////////////////////////////////////////////////
@@ -114,7 +91,6 @@ void convolutionRowCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Fi
 
     int x, y, k;
     
-    #pragma omp parallel for private(x, y, k)
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
             PixelScalar sum = 0;
@@ -140,7 +116,6 @@ void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h
 
     int x, y, k;
 
-    #pragma omp parallel for private(x, y, k)
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
             PixelScalar sum = 0;
@@ -167,14 +142,15 @@ __global__ void convolutionRowGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelS
     int x = blockIdx.x * blockDim.x + threadIdx.x + filterR;
     int y = blockIdx.y * blockDim.y + threadIdx.y + filterR;
 
+
+    // printf("[x,y]=[%d, %d], idx=%d: %f\n", x, y, y * (imageW + 2 * filterR) + x, d_Src[y * (imageW + 2 * filterR) + x]);
     for (k = -filterR; k <= filterR; k++) {
         int d = x + k;
 
-        if (d >= 0 && d < imageW)
-            sum += d_Src[y * imageW + d] * d_Filter[filterR - k];
+        sum += d_Src[y * (imageW + 2 * filterR) + d] * d_Filter[filterR - k];
     }
 
-    d_Dst[y * imageW + x] = sum;
+    d_Dst[y * (imageW + 2 * filterR) + x] = sum;
 }
 
 __global__ void convolutionColumnGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelScalar *d_Filter,
@@ -187,11 +163,10 @@ __global__ void convolutionColumnGPU(PixelScalar *d_Dst, PixelScalar *d_Src, Pix
     for (k = -filterR; k <= filterR; k++) {
         int d = y + k;
 
-        if (d >= 0 && d < imageH)
-            sum += d_Src[d * imageW + x] * d_Filter[filterR - k];
+        sum += d_Src[d * (imageW + 2 * filterR) + x] * d_Filter[filterR - k];
     }
 
-    d_Dst[y * imageW + x] = sum;
+    d_Dst[(y - filterR) * imageW + (x - filterR)] = sum;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -219,8 +194,8 @@ int main(int argc, char **argv) {
     CHECK_SCANF(scanf("%d", &imageW));
     imageH = imageW;
 
-    dim3 dimGrid((imageW  + TILE_WIDTH  - 1)  / TILE_WIDTH, (imageH  + TILE_HEIGHT - 1) / TILE_HEIGHT);
-    dim3 dimBlock(TILE_WIDTH, TILE_HEIGHT);
+    dim3 dimGrid((imageW  + BLOCK_WIDTH  - 1)  / BLOCK_WIDTH, (imageH  + BLOCK_HEIGHT - 1) / BLOCK_HEIGHT);
+    dim3 dimBlock(imageW > TILE_WIDTH ? TILE_WIDTH : imageW, imageH > TILE_HEIGHT ? TILE_HEIGHT : imageH);
 
     printf("Image Width x Height = %i x %i\n\n", imageW, imageH);
     printf("Allocating and initializing host arrays...\n");
@@ -229,6 +204,8 @@ int main(int argc, char **argv) {
     CHECK_ALLOC_HOST(h_Filter);
     h_Input     = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
     CHECK_ALLOC_HOST(h_Input);
+    h_InputPadded = (PixelScalar *)malloc(((imageW + imagePad * 2) * (imageH + imagePad * 2))* sizeof(PixelScalar));
+    CHECK_ALLOC_HOST(h_InputPadded);
     h_Buffer    = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
     CHECK_ALLOC_HOST(h_Buffer);
     h_OutputCPU = (PixelScalar *)malloc(imageW * imageH * sizeof(PixelScalar));
@@ -240,6 +217,8 @@ int main(int argc, char **argv) {
     cudaMalloc((void **) &d_Input, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
     cudaMalloc((void **) &d_Buffer, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
+    CUDA_CHECK_LAST_ERROR();
+    cudaMalloc((void **) &d_Output, imageW * imageH * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
 
     //* Set cuda memory to 0 for padding just in case
@@ -257,13 +236,15 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < imageH; i++) {
         for (int j = 0; j < imageW; j++) {
-            h_Input[i * imageW + j] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
+            PixelScalar value = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
+            h_InputPadded[(i + imagePad) * (imageW + imagePad * 2) + (j + imagePad)] = value;
+            h_Input[i * imageW + j] = value;
         }
     }
 
-    for (int i = 0; i < imageH; i++) {
-        for (int j = 0; j < imageW; j++) {
-            printf("%12.5f ", *(h_Input + i * imageW + j));
+    for (int i = 0; i < imageH + imagePad * 2; i++) {
+        for (int j = 0; j < imageW + imagePad * 2; j++) {
+            printf("%12.5f ", *(h_InputPadded + i * (imageW + imagePad * 2) + j));
         }
         printf("\n");
     }
@@ -274,20 +255,18 @@ int main(int argc, char **argv) {
     //* Copy h_Filter and h_Input to GPU
     cudaMemcpy(d_Filter, h_Filter, FILTER_LENGTH * sizeof(PixelScalar), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-
-    cudaTransferPadded(imagePad, imagePad, d_Input, h_Input, imageW, imageH, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Input, h_InputPadded, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-
     
     printf("GPU computation...\n");
     convolutionRowGPU<<<dimGrid, dimBlock>>>(d_Buffer, d_Input, d_Filter, imageW, imageH, filter_radius);
     cudaDeviceSynchronize();
-    convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Input, d_Buffer, d_Filter, imageW, imageH, filter_radius);
+    convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Output, d_Buffer, d_Filter, imageW, imageH, filter_radius);
     cudaDeviceSynchronize();
 
     //* Transfer data from Device back to Host memory
     CUDA_CHECK_LAST_ERROR();
-    cudaTransferPadded(imagePad, imagePad, d_Input, h_OutputGPU, imageW, imageH, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_OutputGPU, d_Output, imageW * imageH * sizeof(PixelScalar), cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
     timer.Stop();
 

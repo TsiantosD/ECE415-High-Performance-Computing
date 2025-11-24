@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
     imageH = imageW;
 
     dim3 dimGrid((imageW  + TILE_WIDTH  - 1)  / TILE_WIDTH, (imageH  + TILE_HEIGHT - 1) / TILE_HEIGHT);
-    dim3 dimBlock(TILE_WIDTH, TILE_HEIGHT);
+    dim3 dimBlock(imageW > TILE_WIDTH ? TILE_WIDTH : imageW, imageH > TILE_HEIGHT ? TILE_HEIGHT : imageH);
 
     printf("Image Width x Height = %i x %i\n\n", imageW, imageH);
     printf("Allocating and initializing host arrays...\n");
