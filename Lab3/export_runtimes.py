@@ -45,7 +45,7 @@ def collect_all_data():
             continue
 
         # Example:
-        # output/step5/20251124_021628/out_33_1024_rep1
+        # output/step6/20251124_021628/out_33_1024_rep1
         for timestamp_folder in os.listdir(step_path):
             timestamp_path = os.path.join(step_path, timestamp_folder)
             if not os.path.isdir(timestamp_path):
