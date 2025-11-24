@@ -36,7 +36,10 @@ def parse_log_file(filepath):
 
 
 def collect_data(output_base_dir):
-    """Collects GPU/CPU times from all metrics runs in the folder structure."""
+    """
+    Collects GPU/CPU times from all metrics runs in the folder structure.
+    Adjusted to handle structure: base_dir / config_dir / logfiles
+    """
     data = []
 
     if not os.path.isdir(output_base_dir):
@@ -45,9 +48,12 @@ def collect_data(output_base_dir):
 
     # Prompt user to select a subdirectory under metrics if multiple exist
     subdirs = [d for d in os.listdir(output_base_dir) if os.path.isdir(os.path.join(output_base_dir, d))]
+    
+    # --- Start of user selection logic (Kept for completeness) ---
     if not subdirs:
-        print(f"No subdirectories found in '{output_base_dir}'.")
-        return data
+        # If running on 'metrics/runtimes' directly, this might be skipped
+        selected_dir = "" 
+        print(f"No subdirectories found in '{output_base_dir}'. Proceeding with base directory.")
     elif len(subdirs) == 1:
         selected_dir = subdirs[0]
     else:
@@ -63,46 +69,64 @@ def collect_data(output_base_dir):
             except ValueError:
                 pass
             print("Invalid selection. Try again.")
-    output_base_dir = os.path.join(output_base_dir, selected_dir)
+            
+    if selected_dir:
+        output_base_dir = os.path.join(output_base_dir, selected_dir)
+        
     print(f"Selected metrics folder: {output_base_dir}")
+    # --- End of user selection logic ---
 
-    for src_folder in os.listdir(output_base_dir):
-        src_path = os.path.join(output_base_dir, src_folder)
-        if not os.path.isdir(src_path):
+    # --- Start of Revised Data Collection Logic ---
+    # In the original script: 
+    #   Level 1: selected_dir (handled above)
+    #   Level 2: src_folder (e.g., 'default_run') - NO LONGER PRESENT
+    #   Level 3: config_dir (e.g., '16_1024') - THIS IS NOW LEVEL 2
+    
+    # Iterate over the config directories (e.g., '16_1024', '16_1024-dbl', etc.)
+    for config_dir in os.listdir(output_base_dir):
+        config_path = os.path.join(output_base_dir, config_dir)
+        
+        # Check if the item is a directory
+        if not os.path.isdir(config_path):
             continue
 
-        for config_dir in os.listdir(src_path):
-            config_path = os.path.join(src_path, config_dir)
-            if not os.path.isdir(config_path):
+        # Check if the directory name matches the expected configuration regex
+        match = re.match(r'(\d+)_(\d+)(-nofmad)?(-dbl)?', config_dir)
+        if not match:
+            continue
+
+        filter_radius = int(match.group(1))
+        image_size = int(match.group(2))
+        nofmad_flag = bool(match.group(3))
+        dbl_flag = bool(match.group(4))
+        
+        # We need a placeholder for the original 'src_folder' since it's used 
+        # later for plotting labels. We use the directory name of the runtimes folder.
+        # Example: 'runtimes' if the input was 'metrics/runtimes'
+        src_folder_placeholder = os.path.basename(output_base_dir)
+        
+        # Now, iterate through the log files directly inside the config directory
+        for logfile in os.listdir(config_path):
+            if not FILENAME_REGEX.match(logfile):
                 continue
-
-            match = re.match(r'(\d+)_(\d+)(-nofmad)?(-dbl)?', config_dir)
-            if not match:
-                continue
-
-            filter_radius = int(match.group(1))
-            image_size = int(match.group(2))
-            nofmad_flag = bool(match.group(3))
-            dbl_flag = bool(match.group(4))
-
-            for logfile in os.listdir(config_path):
-                if not FILENAME_REGEX.match(logfile):
-                    continue
-                filepath = os.path.join(config_path, logfile)
-                gpu_time, cpu_time = parse_log_file(filepath)
-                if gpu_time is not None and cpu_time is not None:
-                    data.append({
-                        'src_folder': src_folder,
-                        'filter_radius': filter_radius,
-                        'image_size': image_size,
-                        'gpu_time': gpu_time,
-                        'cpu_time': cpu_time,
-                        'nofmad': nofmad_flag,
-                        'dbl': dbl_flag,
-                        'logfile': logfile
-                    })
+            
+            filepath = os.path.join(config_path, logfile)
+            gpu_time, cpu_time = parse_log_file(filepath)
+            
+            if gpu_time is not None and cpu_time is not None:
+                data.append({
+                    'src_folder': src_folder_placeholder, # Using the base folder name
+                    'filter_radius': filter_radius,
+                    'image_size': image_size,
+                    'gpu_time': gpu_time,
+                    'cpu_time': cpu_time,
+                    'nofmad': nofmad_flag,
+                    'dbl': dbl_flag,
+                    'logfile': logfile
+                })
 
     return data
+# --- End of Revised Data Collection Logic ---
 
 
 def generate_plots(df):
@@ -121,6 +145,7 @@ def generate_plots(df):
         "lines.markersize": 10
     })
 
+    # Label generation logic remains the same, using the placeholder 'src_folder'
     df['label'] = df.apply(
         lambda r: f"{r['src_folder']}{'-nofmad' if r['nofmad'] else ''}{'-dbl' if r['dbl'] else ''}", axis=1
     )
@@ -139,7 +164,10 @@ def generate_plots(df):
         )
 
         agg[['gpu_time_std', 'cpu_time_std']] = agg[['gpu_time_std', 'cpu_time_std']].fillna(0)
+        
+        # Calculate speedup and standard deviation of speedup
         agg['speedup'] = agg['cpu_time_mean'] / agg['gpu_time_mean']
+        # Error propagation formula for division (R = A/B): (sigma_R/R)^2 = (sigma_A/A)^2 + (sigma_B/B)^2
         agg['speedup_std'] = agg['speedup'] * np.sqrt(
             (agg['cpu_time_std'] / agg['cpu_time_mean'])**2 +
             (agg['gpu_time_std'] / agg['gpu_time_mean'])**2
@@ -154,11 +182,13 @@ def generate_plots(df):
         ax.plot(agg['image_size'], agg['cpu_time_mean'], marker='x', linestyle='--', color='tab:orange', label='CPU Time')
 
         for _, row in agg.iterrows():
-            ax.text(row['image_size'], row['gpu_time_mean'],
+            ax.text(row['image_size'],
+                    row['gpu_time_mean'] - 4,
                     f"{row['gpu_time_mean']:.4f}±{row['gpu_time_std']:.4f}",
                     ha='center', va='bottom', color='tab:blue', fontsize=12,
                     bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4"))
-            ax.text(row['image_size'], row['cpu_time_mean'],
+            ax.text(row['image_size'],
+                    row['cpu_time_mean'] + (8 if row['cpu_time_mean'] < 25 else 4), # add padding
                     f"{row['cpu_time_mean']:.4f}±{row['cpu_time_std']:.4f}",
                     ha='center', va='top', color='tab:orange', fontsize=12,
                     bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4"))

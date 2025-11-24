@@ -11,7 +11,7 @@ DISABLE_FMAD=false
 IMAGE_SIZE_INPUT=""
 FILTER_RADIUS=""
 REPEAT_COUNT=1
-CUSTOM_OUTPUT_DIR=""
+OUTPUT_DIR=""
 
 # Directory constants
 SOURCE_DIR="src"
@@ -28,7 +28,7 @@ usage() {
     echo "  --image-size <N>        Image size (must be power of two)"
     echo "  --filter-radius <N>     Filter radius (kernel length = 2*N+1)"
     echo "  --repeat <N>            Repeat the same configuration N times"
-    echo "  --output-dir <name>     Optional output subdirectory under metrics/"
+    echo "  --output-dir <name>     Override the SRC_DIR folder name in metrics/"
     exit 0
 }
 
@@ -51,7 +51,7 @@ while [[ $# -gt 0 ]]; do
         --image-size) IMAGE_SIZE_INPUT="$2"; shift 2 ;;
         --filter-radius) FILTER_RADIUS="$2"; shift 2 ;;
         --repeat) REPEAT_COUNT="$2"; shift 2 ;;
-        --output-dir) CUSTOM_OUTPUT_DIR="$2"; shift 2 ;;
+        --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; usage ;;
     esac
 done
@@ -59,7 +59,7 @@ done
 # ---------------------------
 # Prompt for missing inputs
 # ---------------------------
-if [ -z "$SRC_DIR" ]; then
+if [ -z "$SRC_DIR" ] && [ -z "$OUTPUT_DIR" ]; then
     OPTIONS=($(find "$SOURCE_DIR" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort))
     echo "Multiple source dirs found in '$SOURCE_DIR/'. Select one:"
     PS3="Enter number: "
@@ -99,19 +99,14 @@ FULL_SRC_DIR="$SOURCE_DIR/$SRC_DIR"
 TARGET_EXEC="./$FULL_SRC_DIR/$PROGRAM_NAME"
 FILTER_LEN=$((2 * FILTER_RADIUS + 1))
 
-# Construct option suffix
+# Construct folder suffix for double/nofmad
 OPTION_SUFFIX=""
 [ "$DISABLE_FMAD" = true ] && OPTION_SUFFIX="${OPTION_SUFFIX}-nofmad"
 [ "$USE_DOUBLES" = true ] && OPTION_SUFFIX="${OPTION_SUFFIX}-dbl"
 
-# Use custom output dir if provided
-if [ -n "$CUSTOM_OUTPUT_DIR" ]; then
-    BASE_OUTPUT="${OUTPUT_BASE_DIR}/${CUSTOM_OUTPUT_DIR}"
-else
-    BASE_OUTPUT="${OUTPUT_BASE_DIR}"
-fi
-
-FILTER_IMAGE_DIR="${BASE_OUTPUT}/${SRC_DIR}/${FILTER_RADIUS}_${IMAGE_SIZE_INPUT}${OPTION_SUFFIX}"
+# Use OUTPUT_DIR if provided, else SRC_DIR
+TARGET_FOLDER_NAME=${OUTPUT_DIR:-$SRC_DIR}
+FILTER_IMAGE_DIR="${OUTPUT_BASE_DIR}/${TARGET_FOLDER_NAME}/${FILTER_RADIUS}_${IMAGE_SIZE_INPUT}${OPTION_SUFFIX}"
 
 # ---------------------------
 # Compile
@@ -138,11 +133,11 @@ echo "Repeat count:  $REPEAT_COUNT"
 echo "Output folder: $FILTER_IMAGE_DIR"
 
 for (( j=1; j<=REPEAT_COUNT; j++ )); do
-    TIMESTAMP=$(date +"%Y%m%d_%H%M%S_%3N")
+    TIMESTAMP=$(date +"%Y%m%d_%H%M%S_%3N") # milliseconds included
     FILEPATH="${FILTER_IMAGE_DIR}/${TIMESTAMP}-run_${j}.log"
     echo "$FILTER_LEN $IMAGE_SIZE_INPUT" | "$TARGET_EXEC" > "$FILEPATH" 2>&1
     echo "Run $j/$REPEAT_COUNT → $(basename $FILEPATH)"
-    sleep 0.01
+    sleep 0.01 # ensure timestamp difference if runs are very fast
 done
 
 echo "-----------------------------------------------------------"

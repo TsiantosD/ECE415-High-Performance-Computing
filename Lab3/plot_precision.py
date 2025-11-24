@@ -38,54 +38,91 @@ def parse_log_file(path):
 
 
 def collect_data(base_dir):
-    """Collect max difference data from all runs in metrics."""
+    """
+    Collect max difference data from all runs in metrics.
+    Adjusted for structure: base_dir / selected_subdir / config_dir / logfiles
+    """
     records = []
 
     if not os.path.isdir(base_dir):
         print(f"Error: Base directory '{base_dir}' does not exist.")
         return pd.DataFrame()
 
-    for src_folder in os.listdir(base_dir):
-        if TARGET_SRC_FOLDERS and src_folder not in TARGET_SRC_FOLDERS:
+    # --- Directory Selection Logic (Kept as is) ---
+    subdirs = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
+    
+    if not subdirs:
+        print(f"No subdirectories found in '{base_dir}'. Exiting.")
+        return pd.DataFrame()
+    
+    if len(subdirs) == 1:
+        selected_subdir = subdirs[0]
+        print(f"Only one subdirectory found: **{selected_subdir}**. Selecting it automatically.")
+    else:
+        print("\nMultiple metrics subdirectories found. Select one to plot:")
+        for idx, d in enumerate(subdirs, start=1):
+            print(f"  {idx}) {d}")
+        
+        selected_subdir = None
+        while selected_subdir is None:
+            try:
+                choice = input("Enter number: ")
+                choice_idx = int(choice) - 1
+                if 0 <= choice_idx < len(subdirs):
+                    selected_subdir = subdirs[choice_idx]
+                    break
+            except ValueError:
+                pass
+            print("Invalid selection. Please enter a valid number.")
+
+    metrics_path = os.path.join(base_dir, selected_subdir)
+    print(f"Selected metrics path: **{metrics_path}**")
+    # --- End of Directory Selection Logic ---
+    
+    # --- REVISED DATA COLLECTION LOGIC ---
+    # We treat the directories like '128_1024' as the config_dir (Level 2).
+    # We use the selected_subdir (e.g., 'precision') as the 'src_folder' label.
+    
+    # Use the selected subdirectory name as the placeholder for the 'src_folder' column
+    src_folder_placeholder = selected_subdir 
+
+    # Iterate over directories like '128_1024', '16_1024', etc. (These are config_dir)
+    for config_dir in os.listdir(metrics_path):
+        config_path = os.path.join(metrics_path, config_dir)
+        
+        if not os.path.isdir(config_path):
             continue
 
-        src_path = os.path.join(base_dir, src_folder)
-        if not os.path.isdir(src_path):
+        # Extract filter_radius and image_size
+        match = re.match(r'(\d+)_(\d+)(-nofmad)?(-dbl)?', config_dir)
+        if not match:
             continue
+            
+        filter_radius = int(match.group(1))
+        image_size = int(match.group(2))
+        nofmad_flag = bool(match.group(3))
+        dbl_flag = bool(match.group(4))
 
-        # Iterate over config folders: filter_radius_image_size{-nofmad}{-dbl}
-        for config_dir in os.listdir(src_path):
-            config_path = os.path.join(src_path, config_dir)
-            if not os.path.isdir(config_path):
+        # Iterate over all timestamped log files *directly* inside the config directory
+        for logfile in os.listdir(config_path):
+            if not LOGFILE_REGEX.match(logfile):
+                continue
+            
+            full_path = os.path.join(config_path, logfile)
+            max_diff = parse_log_file(full_path)
+            if max_diff is None:
                 continue
 
-            # Extract filter_radius and image_size
-            match = re.match(r'(\d+)_(\d+)(-nofmad)?(-dbl)?', config_dir)
-            if not match:
-                continue
-            filter_radius = int(match.group(1))
-            image_size = int(match.group(2))
-            nofmad_flag = bool(match.group(3))
-            dbl_flag = bool(match.group(4))
-
-            # Iterate over all timestamped log files
-            for logfile in os.listdir(config_path):
-                if not LOGFILE_REGEX.match(logfile):
-                    continue
-                full_path = os.path.join(config_path, logfile)
-                max_diff = parse_log_file(full_path)
-                if max_diff is None:
-                    continue
-
-                records.append({
-                    "src_folder": src_folder,
-                    "filter_radius": filter_radius,
-                    "image_size": image_size,
-                    "nofmad": nofmad_flag,
-                    "dbl": dbl_flag,
-                    "logfile": logfile,
-                    "max_diff": max_diff
-                })
+            records.append({
+                # Use the placeholder value here:
+                "src_folder": src_folder_placeholder, 
+                "filter_radius": filter_radius,
+                "image_size": image_size,
+                "nofmad": nofmad_flag,
+                "dbl": dbl_flag,
+                "logfile": logfile,
+                "max_diff": max_diff
+            })
 
     return pd.DataFrame(records)
 
@@ -134,7 +171,7 @@ def plot_max_diff(df):
             fmt='o-', capsize=5, linewidth=2
         )
 
-        plt.title(f"Max Difference vs Filter Radius ({label})", fontsize=16)
+        plt.title(f"{'Doubles' if 'dbl' in label else 'Floats'} - Max Difference vs Filter Radius", fontsize=16)
         plt.xlabel("Filter Radius", fontsize=14)
         plt.ylabel("Max Difference (error)", fontsize=14)
         plt.grid(True, alpha=0.3)
