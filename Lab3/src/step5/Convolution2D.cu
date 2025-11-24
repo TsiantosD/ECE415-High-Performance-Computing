@@ -48,11 +48,14 @@ typedef enum {
     NORMAL = 0
 } ErrorCode;
 
-#ifdef USE_DOUBLES
+#if USE_DOUBLES == 1
 typedef double PixelScalar;
-#else
+#elif USE_DOUBLES == 0
 typedef float PixelScalar;
+#else
+#error "USE_DOUBLES must be 0 or 1"
 #endif
+
 unsigned int filter_radius;
 
 PixelScalar
@@ -85,7 +88,7 @@ void convolutionRowCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Fi
                        int imageW, int imageH, int filterR) {
 
     int x, y, k;
-                      
+    
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
             PixelScalar sum = 0;
@@ -175,6 +178,8 @@ int main(int argc, char **argv) {
     PixelScalar maxDiff = 0;
 	struct timespec  tv1, tv2;
     
+    printf("Using scalar with sizeof: %lubytes\n", sizeof(PixelScalar));
+
     printf("Enter filter radius : ");
     CHECK_SCANF(scanf("%d", &filter_radius));
     
@@ -255,8 +260,12 @@ int main(int argc, char **argv) {
             PixelScalar diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
             maxDiff = diff > maxDiff ? diff : maxDiff;
 
-            if (diff > accuracy)
+            if (diff > accuracy) {
+                printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
+                printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
+                printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
 		        correctOutput = 0;
+            }
         }
     }
 
