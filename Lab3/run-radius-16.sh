@@ -1,13 +1,50 @@
-# For question 5b, run with radius 16 and image sizes up to 16k
-./run.sh --step step5 --target 16 --size 1024 --repeat 10
-./run.sh --step step5 --target 16 --size 2048 --repeat 10
-./run.sh --step step5 --target 16 --size 4096 --repeat 10
-./run.sh --step step5 --target 16 --size 8192 --repeat 10
-./run.sh --step step5 --target 16 --size 16384 --repeat 10
+#!/bin/bash
 
-# For question 6, same run but with doubles
-./run.sh --step step5 --target 16 --size 1024 --repeat 10 --use-doubles
-./run.sh --step step5 --target 16 --size 2048 --repeat 10 --use-doubles
-./run.sh --step step5 --target 16 --size 4096 --repeat 10 --use-doubles
-./run.sh --step step5 --target 16 --size 8192 --repeat 10 --use-doubles
-./run.sh --step step5 --target 16 --size 16384 --repeat 10 --use-doubles
+# ================= CONFIGURATION =================
+SIZES=(1024 2048 4096 8192 16384)
+TARGET=16
+REPEAT=10
+
+# Prompt user for type
+echo "Choose data type to run:"
+echo "1) float"
+echo "2) double"
+echo "3) both"
+read -p "Enter choice [1-3]: " CHOICE
+
+# Determine which runs to execute
+RUN_FLOATS=false
+RUN_DOUBLES=false
+
+case $CHOICE in
+    1)
+        RUN_FLOATS=true
+        ;;
+    2)
+        RUN_DOUBLES=true
+        ;;
+    3)
+        RUN_FLOATS=true
+        RUN_DOUBLES=true
+        ;;
+    *)
+        echo "Invalid choice."
+        exit 1
+        ;;
+esac
+
+# Run float commands
+if [ "$RUN_FLOATS" = true ]; then
+    echo "Running with floats..."
+    for SIZE in "${SIZES[@]}"; do
+        ./run.sh --step step5 --target $TARGET --size $SIZE --repeat $REPEAT
+    done
+fi
+
+# Run double commands
+if [ "$RUN_DOUBLES" = true ]; then
+    echo "Running with doubles..."
+    for SIZE in "${SIZES[@]}"; do
+        ./run.sh --step step5 --target $TARGET --size $SIZE --repeat $REPEAT --use-doubles
+    done
+fi

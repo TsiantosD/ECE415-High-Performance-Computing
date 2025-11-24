@@ -261,9 +261,9 @@ int main(int argc, char **argv) {
             maxDiff = diff > maxDiff ? diff : maxDiff;
 
             if (diff > accuracy) {
-                printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
-                printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
-                printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
+                // printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
+                // printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
+                // printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
 		        correctOutput = 0;
             }
         }
@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
     if (correctOutput)
         printf("Results correct!\n");
 
-    printf("Max difference: %.15lf\n", maxDiff);
+    printf("Max difference: %.15f\n", (double)maxDiff);
     printf("Time in GPU: %f\n", timer.Elapsed()/1000);
     printf("Time in CPU: %lf\n", (double) (tv2.tv_nsec - tv1.tv_nsec) / 1.0E9 + (double) (tv2.tv_sec - tv1.tv_sec));
 
