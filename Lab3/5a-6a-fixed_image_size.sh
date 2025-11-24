@@ -5,7 +5,7 @@ IMAGE_SIZE=1024
 REPEAT=10
 
 # Power-of-two kernel radii
-RADII=(2 4 8 16 32 64 128 256 512 1024)
+RADII=(2 4 8 16 32 64 128 256)
 
 # Prompt user for type
 echo "Choose data type to run:"
