@@ -1,11 +1,12 @@
 import os
 import re
 import math
+import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# --- Configuration ---
-OUTPUT_BASE_DIR = 'output'
+# --- Default Configuration ---
+DEFAULT_OUTPUT_BASE_DIR = 'output'
 PLOTS_DIR = 'plots'
 TARGET_STEPS = ['step5', 'step5_dbl']
 TARGET_KERNEL_LENGTH = 33
@@ -96,24 +97,21 @@ def collect_data(output_dir, step_name):
 
 
 def generate_separate_plots(df):
-    """Plots separate GPU/CPU mean times and speedup with std dev annotations."""
-    
-    # Speedup mean
-    df['speedup'] = df['cpu_time_mean'] / df['gpu_time_mean']
-
-    # Speedup std dev (error propagation)
-    df['speedup_std'] = (
-        df['speedup'] *
-        ((df['cpu_time_std'] / df['cpu_time_mean'])**2 +
-         (df['gpu_time_std'] / df['gpu_time_mean'])**2)**0.5
-    )
-
-    # Fix NaN speedup_std
-    df['speedup_std'] = df['speedup_std'].fillna(0)
+    """Plots separate GPU/CPU mean times with runtime annotations."""
 
     os.makedirs(PLOTS_DIR, exist_ok=True)
-
     df['image_size'] = df['image_size'].astype(int)
+
+    plt.rcParams.update({
+        "font.size": 16,            # base font size
+        "axes.titlesize": 20,       # title size
+        "axes.labelsize": 18,       # axis label size
+        "xtick.labelsize": 16,      # tick label size
+        "ytick.labelsize": 16,
+        "legend.fontsize": 16,      # legend text
+        "lines.linewidth": 2.5,     # thicker lines
+        "lines.markersize": 10      # bigger points
+    })
 
     # Group by step (step5, step5_dbl)
     for step, group in df.groupby('step'):
@@ -141,33 +139,54 @@ def generate_separate_plots(df):
             label='CPU Time (mean)'
         )
 
-        # Annotate speedup on each point
+        # Annotate GPU & CPU runtimes on each point
         for _, row in group_sorted.iterrows():
-            text = f"{row['speedup']:.2f}±{row['speedup_std']:.2f}x"
+
+            gpu_label = f"{row['gpu_time_mean']:.4f}±{row['gpu_time_std']:.4f}s"
+            cpu_label = f"{row['cpu_time_mean']:.4f}±{row['cpu_time_std']:.4f}s"
+
+            # GPU annotation
+            y_offset_gpu = -2.5
             ax1.text(
                 row['image_size'],
-                row['gpu_time_mean'] + 1.5,
-                text,
+                row['gpu_time_mean'] + y_offset_gpu,
+                gpu_label,
                 ha='center',
                 va='bottom',
                 fontsize=12,
                 color='tab:blue',
-                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.5")
+                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4")
             )
 
-        ax1.set_title(f'Runtime and Speedup (Kernel Radius: {math.floor(TARGET_KERNEL_LENGTH / 2)})')
+            # CPU annotation
+            y_offset_cpu = 2.5
+            ax1.text(
+                row['image_size'],
+                row['cpu_time_mean'] + y_offset_cpu,
+                cpu_label,
+                ha='center',
+                va='top',
+                fontsize=12,
+                color='tab:orange',
+                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4")
+            )
+
+        title_prefix = "Doubles" if "_dbl" in step else "Floats"
+        ax1.set_title(f'{title_prefix} – CPU/GPU Runtime (Filter radius: {math.floor(TARGET_KERNEL_LENGTH / 2)})')
         ax1.set_xlabel('Image Size (N)')
         ax1.set_ylabel('Runtime (seconds)')
         ax1.grid(True, linestyle='--', axis='x')
+        plt.xscale('log', base=2)
 
         if not group_sorted['image_size'].empty:
-            ax1.set_xticks(sorted(group_sorted['image_size'].unique()))
+            ticks = sorted(group_sorted['image_size'].unique())
+            ax1.set_xticks(ticks)
+            ax1.get_xaxis().set_major_formatter(plt.FormatStrFormatter('%d'))
 
         ax1.legend(loc='upper left')
-
         plt.tight_layout()
 
-        plot_path = os.path.join(PLOTS_DIR, f'{step}_speedup_k{TARGET_KERNEL_LENGTH}.png')
+        plot_path = os.path.join(PLOTS_DIR, f'{step}_runtime_k{TARGET_KERNEL_LENGTH}.png')
         plt.savefig(plot_path)
         plt.show()
 
@@ -175,6 +194,19 @@ def generate_separate_plots(df):
 
 
 if __name__ == '__main__':
+    # Command line argument for output dir
+    if len(sys.argv) > 1:
+        OUTPUT_BASE_DIR = sys.argv[1]
+        print(f"Using custom output directory: {OUTPUT_BASE_DIR}")
+    else:
+        OUTPUT_BASE_DIR = DEFAULT_OUTPUT_BASE_DIR
+        print(f"Using default output directory: {OUTPUT_BASE_DIR}")
+
+    # Ensure output directory exists
+    if not os.path.isdir(OUTPUT_BASE_DIR):
+        print(f"Error: Provided output directory '{OUTPUT_BASE_DIR}' does not exist.")
+        sys.exit(1)
+
     all_data = []
 
     # Collect data from all target steps
