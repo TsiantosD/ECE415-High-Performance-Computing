@@ -100,7 +100,7 @@ void cudaTransferPadded (int xPad, int yPad, PixelScalar *device, PixelScalar *h
             cudaMemcpy(curRowStartH, curRowStartD, arrayWidth * sizeof(PixelScalar), kind); 
         }
         // CUDA_CHECK_LAST_ERROR(); //! check outside of function
-        curRowStartD += (xPad << 1) + 1;  //* Skips side padding
+        curRowStartD += (xPad << 1) + arrayWidth;  //* Skips side padding
         curRowStartH += arrayWidth; //* Go next line on host
     }
     printf("-------------------------------------");
@@ -237,15 +237,15 @@ int main(int argc, char **argv) {
     CHECK_ALLOC_HOST(h_OutputGPU);
     cudaMalloc((void **) &d_Filter, FILTER_LENGTH * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc((void **) &d_Input, ((imageW + imagePad) * (imageH + imagePad)) * sizeof(PixelScalar));
+    cudaMalloc((void **) &d_Input, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc((void **) &d_Buffer, ((imageW + imagePad) * (imageH + imagePad)) * sizeof(PixelScalar));
+    cudaMalloc((void **) &d_Buffer, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
 
     //* Set cuda memory to 0 for padding just in case
-    cudaMemset(d_Input, 0, ((imageW + imagePad) * (imageH + imagePad)) * sizeof(PixelScalar));
+    cudaMemset(d_Input, 0, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
-    cudaMemset(d_Buffer, 0, ((imageW + imagePad) * (imageH + imagePad)) * sizeof(PixelScalar));
+    cudaMemset(d_Buffer, 0, ((imageW + imagePad * 2) * (imageH + imagePad * 2)) * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
     
     //* Initialise random arrays
@@ -255,9 +255,9 @@ int main(int argc, char **argv) {
         h_Filter[i] = (PixelScalar)(rand() % 16);
     }
 
-    for (int i = imagePad; i < imageW + imagePad; i++) {
-        for (int j = imagePad; j < imageH + imagePad; j++) {
-            h_Input[i] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            h_Input[i * imageW + j] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
         }
     }
 
@@ -287,7 +287,7 @@ int main(int argc, char **argv) {
 
     //* Transfer data from Device back to Host memory
     CUDA_CHECK_LAST_ERROR();
-    cudaTransferPadded(imagePad, imagePad, d_Input, h_Input, imageW, imageH, cudaMemcpyDeviceToHost);
+    cudaTransferPadded(imagePad, imagePad, d_Input, h_OutputGPU, imageW, imageH, cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
     timer.Stop();
 
@@ -298,6 +298,23 @@ int main(int argc, char **argv) {
 	clock_gettime(CLOCK_MONOTONIC_RAW, &tv2);
 
     
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            printf("%12.5f ", *(h_OutputCPU + i * imageW + j));
+        }
+        printf("\n");
+    }
+    printf("\n");
+    printf("\n");
+    printf("\n");
+
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            printf("%12.5f ", *(h_OutputGPU + i * imageW + j));
+        }
+        printf("\n");
+    }
+
     //* Perform comparison between GPU / CPU results
     for (int y = 0; y < imageH; y++) {
         for (int x = 0; x < imageW; x++) {
