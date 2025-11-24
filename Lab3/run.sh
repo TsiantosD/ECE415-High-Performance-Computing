@@ -148,7 +148,7 @@ if [ -z "$STEP_DIR" ]; then
     fi
 fi
 
-# The full path to the step directory (e.g., src/step5)
+# The full path to the step directory (e.g., src/step6)
 FULL_STEP_DIR="$SOURCE_DIR/$STEP_DIR"
 TARGET_EXEC="./$FULL_STEP_DIR/$PROGRAM_NAME"
 
@@ -215,7 +215,7 @@ if [ "$DISABLE_FMAD" = true ]; then
     SUFFIX="${SUFFIX}_nofmad"
 fi
 
-# Output directory path (e.g., output/step5_dbl)
+# Output directory path (e.g., output/step6_dbl)
 OUTPUT_DIR="$OUTPUT_BASE_DIR/${SUFFIX}"
 
 # Generate Batch Timestamp ONCE for the folder

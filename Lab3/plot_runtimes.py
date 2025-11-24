@@ -8,7 +8,7 @@ import pandas as pd
 # --- Default Configuration ---
 DEFAULT_OUTPUT_BASE_DIR = 'output'
 PLOTS_DIR = 'plots'
-TARGET_STEPS = ['step5', 'step5_dbl']
+TARGET_STEPS = ['step6', 'step6_dbl']
 TARGET_KERNEL_LENGTH = 33
 
 # Regex for filenames
@@ -113,7 +113,7 @@ def generate_separate_plots(df):
         "lines.markersize": 10      # bigger points
     })
 
-    # Group by step (step5, step5_dbl)
+    # Group by step (step6, step6_dbl)
     for step, group in df.groupby('step'):
         group_sorted = group.sort_values(by='image_size')
 

@@ -37,7 +37,7 @@ esac
 if [ "$RUN_FLOATS" = true ]; then
     echo "Running with floats..."
     for SIZE in "${SIZES[@]}"; do
-        ./run.sh --step step5 --target $TARGET --size $SIZE --repeat $REPEAT
+        ./run.sh --step step6 --target $TARGET --size $SIZE --repeat $REPEAT
     done
 fi
 
@@ -45,6 +45,6 @@ fi
 if [ "$RUN_DOUBLES" = true ]; then
     echo "Running with doubles..."
     for SIZE in "${SIZES[@]}"; do
-        ./run.sh --step step5 --target $TARGET --size $SIZE --repeat $REPEAT --use-doubles
+        ./run.sh --step step6 --target $TARGET --size $SIZE --repeat $REPEAT --use-doubles
     done
 fi
