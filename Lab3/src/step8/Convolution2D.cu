@@ -89,8 +89,11 @@ void cudaTransferPadded (int xPad, int yPad, PixelScalar *device, PixelScalar *h
     //? Incrementing pointers (only device padded)
     PixelScalar *curRowStartD = device + startOffset;
     PixelScalar *curRowStartH = host;
+    printf("xPad: %d, yPad: %d, width: %d\n", xPad, yPad, arrayWidth);
     for (int i = 0; i < arrayHeight; i++) {
         //TODO: maybe replace with async and check error once at the end of for
+        printf("Device index: [%d]\n", (int) (curRowStartD - device));
+        printf("Device dims: [%d][%d]\n", (int) (curRowStartD - device) % paddedRow, (int) (curRowStartD - device) / paddedRow);
         if (kind == cudaMemcpyHostToDevice) {
             cudaMemcpy(curRowStartD, curRowStartH, arrayWidth * sizeof(PixelScalar), kind); 
         } else {
@@ -100,6 +103,7 @@ void cudaTransferPadded (int xPad, int yPad, PixelScalar *device, PixelScalar *h
         curRowStartD += (xPad << 1) + 1;  //* Skips side padding
         curRowStartH += arrayWidth; //* Go next line on host
     }
+    printf("-------------------------------------");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -255,6 +259,13 @@ int main(int argc, char **argv) {
         for (int j = imagePad; j < imageH + imagePad; j++) {
             h_Input[i] = (PixelScalar)rand() / ((PixelScalar)RAND_MAX / 255) + (PixelScalar)rand() / (PixelScalar)RAND_MAX;
         }
+    }
+
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            printf("%12.5f ", *(h_Input + i * imageW + j));
+        }
+        printf("\n");
     }
 
     GpuTimer timer = GpuTimer();
