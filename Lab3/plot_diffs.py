@@ -100,6 +100,17 @@ def plot_max_diff(df):
         lambda r: f"{r['src_folder']}{'-nofmad' if r['nofmad'] else ''}{'-dbl' if r['dbl'] else ''}", axis=1
     )
 
+    plt.rcParams.update({
+        "font.size": 16,
+        "axes.titlesize": 20,
+        "axes.labelsize": 18,
+        "xtick.labelsize": 16,
+        "ytick.labelsize": 16,
+        "legend.fontsize": 16,
+        "lines.linewidth": 2.5,
+        "lines.markersize": 10
+    })
+
     for label, group in df.groupby('label'):
         # Compute mean and std of max_diff per filter_radius
         agg = group.groupby('filter_radius').agg(
@@ -127,6 +138,7 @@ def plot_max_diff(df):
         plt.xlabel("Filter Radius", fontsize=14)
         plt.ylabel("Max Difference (error)", fontsize=14)
         plt.grid(True, alpha=0.3)
+        plt.xscale('log', base=2)
 
         out_path = os.path.join(PLOTS_DIR, f"{label}_maxdiff_vs_radius.png")
         plt.savefig(out_path, dpi=200)

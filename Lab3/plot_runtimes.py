@@ -36,12 +36,35 @@ def parse_log_file(filepath):
 
 
 def collect_data(output_base_dir):
-    """Collects GPU/CPU times from all metrics runs in the new folder structure."""
+    """Collects GPU/CPU times from all metrics runs in the folder structure."""
     data = []
 
     if not os.path.isdir(output_base_dir):
         print(f"Error: Output base directory '{output_base_dir}' does not exist.")
         return data
+
+    # Prompt user to select a subdirectory under metrics if multiple exist
+    subdirs = [d for d in os.listdir(output_base_dir) if os.path.isdir(os.path.join(output_base_dir, d))]
+    if not subdirs:
+        print(f"No subdirectories found in '{output_base_dir}'.")
+        return data
+    elif len(subdirs) == 1:
+        selected_dir = subdirs[0]
+    else:
+        print("Multiple metrics subdirectories found. Select one to plot:")
+        for idx, d in enumerate(subdirs, start=1):
+            print(f"{idx}) {d}")
+        while True:
+            try:
+                choice = int(input("Enter number: "))
+                if 1 <= choice <= len(subdirs):
+                    selected_dir = subdirs[choice - 1]
+                    break
+            except ValueError:
+                pass
+            print("Invalid selection. Try again.")
+    output_base_dir = os.path.join(output_base_dir, selected_dir)
+    print(f"Selected metrics folder: {output_base_dir}")
 
     for src_folder in os.listdir(output_base_dir):
         src_path = os.path.join(output_base_dir, src_folder)
@@ -103,7 +126,6 @@ def generate_plots(df):
     )
 
     for label, group in df.groupby('label'):
-        # Aggregate mean and std
         agg = (
             group.groupby(['filter_radius', 'image_size'])
                  .agg(
@@ -117,15 +139,12 @@ def generate_plots(df):
         )
 
         agg[['gpu_time_std', 'cpu_time_std']] = agg[['gpu_time_std', 'cpu_time_std']].fillna(0)
-        # Compute speedup and its std
         agg['speedup'] = agg['cpu_time_mean'] / agg['gpu_time_mean']
-        # Approximate std using error propagation: σ(speedup) ≈ speedup * sqrt((σ_cpu/μ_cpu)^2 + (σ_gpu/μ_gpu)^2)
         agg['speedup_std'] = agg['speedup'] * np.sqrt(
             (agg['cpu_time_std'] / agg['cpu_time_mean'])**2 +
             (agg['gpu_time_std'] / agg['gpu_time_mean'])**2
         )
 
-        # Save CSV
         csv_file = os.path.join(CSV_DIR, f"{label}_runtime_k{TARGET_KERNEL_LENGTH}.csv")
         agg.to_csv(csv_file, index=False)
         print(f"Saved CSV data: {csv_file}")
@@ -166,12 +185,12 @@ def generate_plots(df):
 
 
 if __name__ == '__main__':
-    output_base_dir = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUTPUT_BASE_DIR
-    print(f"Using metrics directory: {output_base_dir}")
+    base_dir = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUTPUT_BASE_DIR
+    print(f"Base metrics directory: {base_dir}")
 
-    all_data = collect_data(output_base_dir)
+    all_data = collect_data(base_dir)
     if not all_data:
-        print("No data found in the metrics directory.")
+        print("No data found in the selected metrics folder.")
         sys.exit(1)
 
     df = pd.DataFrame(all_data)

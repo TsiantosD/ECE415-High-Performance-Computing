@@ -34,7 +34,8 @@ if [ "$RUN_FLOATS" = true ]; then
             --src-dir step6 \
             --filter-radius "$R" \
             --image-size "$IMAGE_SIZE" \
-            --repeat "$REPEAT"
+            --repeat "$REPEAT" \
+            --output-dir precision
     done
 fi
 
@@ -49,6 +50,7 @@ if [ "$RUN_DOUBLES" = true ]; then
             --filter-radius "$R" \
             --image-size "$IMAGE_SIZE" \
             --repeat "$REPEAT" \
-            --use-doubles
+            --use-doubles \
+            --output-dir precision
     done
 fi
