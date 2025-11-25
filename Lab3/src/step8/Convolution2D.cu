@@ -10,8 +10,8 @@
 #define FILTER_LENGTH    (2 * filter_radius + 1)
 #define ABS(val)         ((val)<0.0 ? (-(val)) : (val))
 #define accuracy         0.00005 
-#define TILE_WIDTH       32
-#define TILE_HEIGHT      32
+#define BLOCK_WIDTH       32
+#define BLOCK_HEIGHT      32
 
 #define CHECK_ALLOC_HOST(ptr)                        \
     do {                                             \
@@ -195,8 +195,8 @@ int main(int argc, char **argv) {
     paddedW = imageW + filter_radius * 2;
     paddedSize = paddedW * (imageH + filter_radius * 2);
 
-    dim3 dimGrid((imageW  + TILE_WIDTH  - 1)  / TILE_WIDTH, (imageH  + TILE_HEIGHT - 1) / TILE_HEIGHT);
-    dim3 dimBlock(imageW > TILE_WIDTH ? TILE_WIDTH : imageW, imageH > TILE_HEIGHT ? TILE_HEIGHT : imageH);
+    dim3 dimGrid((imageW  + BLOCK_WIDTH  - 1)  / BLOCK_WIDTH, (imageH  + BLOCK_HEIGHT - 1) / BLOCK_HEIGHT);
+    dim3 dimBlock(imageW > BLOCK_WIDTH ? BLOCK_WIDTH : imageW, imageH > BLOCK_HEIGHT ? BLOCK_HEIGHT : imageH);
 
     printf("Image Width x Height = %i x %i\n\n", imageW, imageH);
     printf("Allocating and initializing host arrays...\n");
