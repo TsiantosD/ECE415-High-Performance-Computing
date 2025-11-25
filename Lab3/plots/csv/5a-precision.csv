@@ -1,0 +1,10 @@
+src_folder,filter_radius,image_size,nofmad,dbl,logfile,max_diff,label
+5a-precision,256,1024,False,False,20251125_193642_546-run_1.log,640.0,5a-precision
+5a-precision,64,1024,False,False,20251125_193636_840-run_1.log,40.0,5a-precision
+5a-precision,16,1024,False,False,20251125_193632_336-run_1.log,3.0,5a-precision
+5a-precision,2,1024,False,False,20251125_193625_849-run_1.log,0.046875,5a-precision
+5a-precision,8,1024,False,False,20251125_193630_120-run_1.log,1.0,5a-precision
+5a-precision,1,1024,False,False,20251125_193623_779-run_1.log,0.0078125,5a-precision
+5a-precision,128,1024,False,False,20251125_193639_400-run_1.log,160.0,5a-precision
+5a-precision,4,1024,False,False,20251125_193627_961-run_1.log,0.25,5a-precision
+5a-precision,32,1024,False,False,20251125_193634_599-run_1.log,10.0,5a-precision

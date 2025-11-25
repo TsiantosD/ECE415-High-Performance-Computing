@@ -1,0 +1,10 @@
+src_folder,filter_radius,image_size,nofmad,dbl,logfile,max_diff
+6a-precision,4,1024,False,True,20251125_193650_898-run_1.log,5.82077e-10
+6a-precision,32,1024,False,True,20251125_193657_640-run_1.log,2.2351742e-08
+6a-precision,8,1024,False,True,20251125_193653_123-run_1.log,1.862645e-09
+6a-precision,64,1024,False,True,20251125_193700_065-run_1.log,7.4505806e-08
+6a-precision,1,1024,False,True,20251125_193646_451-run_1.log,1.4552e-11
+6a-precision,128,1024,False,True,20251125_193702_681-run_1.log,2.98023224e-07
+6a-precision,256,1024,False,True,20251125_193705_918-run_1.log,1.192092896e-06
+6a-precision,2,1024,False,True,20251125_193648_712-run_1.log,8.7311e-11
+6a-precision,16,1024,False,True,20251125_193655_428-run_1.log,5.587935e-09
