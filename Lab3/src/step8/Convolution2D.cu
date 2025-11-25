@@ -138,7 +138,7 @@ __global__ void convolutionRowGPU(PixelScalar *d_Dst, PixelScalar *d_Src, PixelS
                                int imageW, int imageH, int filterR) {
     int k;
     PixelScalar sum = 0;
-    int paddedWidth = (imageW + 2 * filterR);
+    int paddedWidth = (imageW + filterR);
     int x = blockIdx.x * blockDim.x + threadIdx.x + filterR;
     int y = blockIdx.y * blockDim.y + threadIdx.y + filterR;
 
@@ -155,7 +155,7 @@ __global__ void convolutionColumnGPU(PixelScalar *d_Dst, PixelScalar *d_Src, Pix
                                int imageW, int imageH, int filterR) {
     int k;
     PixelScalar sum = 0;
-    int paddedWidth = (imageW + 2 * filterR);
+    int paddedWidth = (imageW + filterR);
     int x = blockIdx.x * blockDim.x + threadIdx.x + filterR;
     int y = blockIdx.y * blockDim.y + threadIdx.y + filterR;
     
@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
     CHECK_SCANF(scanf("%d", &imageW));
     imageH = imageW;
     size = imageH * imageW;
-    paddedW = imageW + filter_radius * 2;
+    paddedW = imageW + filter_radius;
     paddedSize = paddedW * (imageH + filter_radius * 2);
 
     dim3 dimGrid((imageW  + BLOCK_WIDTH  - 1)  / BLOCK_WIDTH, (imageH  + BLOCK_HEIGHT - 1) / BLOCK_HEIGHT);
@@ -283,6 +283,8 @@ int main(int argc, char **argv) {
 
     if (correctOutput)
         printf("Results correct!\n");
+    else
+        printf("Results not correct!\n");
 
     printf("Time in GPU: %f\n", timer.Elapsed()/1000);
     printf("Time in CPU: %lf\n", (double) (tv2.tv_nsec - tv1.tv_nsec) / 1.0E9 + (double) (tv2.tv_sec - tv1.tv_sec));

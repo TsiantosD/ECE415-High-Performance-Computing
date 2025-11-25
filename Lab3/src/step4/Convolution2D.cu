@@ -255,6 +255,8 @@ int main(int argc, char **argv) {
 
     if (correctOutput)
         printf("Results correct!\n");
+    else
+        printf("Results not correct!\n");
 
     // Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
     cleanUp(NORMAL);

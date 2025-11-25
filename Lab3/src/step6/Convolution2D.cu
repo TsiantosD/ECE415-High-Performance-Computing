@@ -269,6 +269,8 @@ int main(int argc, char **argv) {
 
     if (correctOutput)
         printf("Results correct!\n");
+    else
+        printf("Results not correct!\n");
 
     printf("Max difference: %.15f\n", (double)maxDiff);
     printf("Time in GPU: %f\n", timer.Elapsed()/1000);
