@@ -45,11 +45,7 @@ typedef enum {
     NORMAL = 0
 } ErrorCode;
 
-#ifdef USE_DOUBLES
-typedef double PixelScalar;
-#else
 typedef float PixelScalar;
-#endif
 unsigned int filter_radius;
 
 PixelScalar
@@ -249,9 +245,6 @@ int main(int argc, char **argv) {
 
             if (diff > accuracy) {
 		        correctOutput = 0;
-                // printf("Accuracy bigger than %f on pixel [%d, %d]\n", accuracy, x, y);
-                // printf("  h_OutputCPU[%d]=%f\n", index, h_OutputCPU[index]);
-                // printf("  h_OutputGPU[%d]=%f\n", index, h_OutputGPU[index]);
             }
         }
     }
