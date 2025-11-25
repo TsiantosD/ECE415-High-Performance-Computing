@@ -2,4 +2,4 @@
 *.vscode/
 *venv/
 *output*/
-*plots/
+metrics/

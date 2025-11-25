@@ -4,15 +4,16 @@ import math
 import sys
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 
 # --- Default Configuration ---
-DEFAULT_OUTPUT_BASE_DIR = 'output'
+DEFAULT_OUTPUT_BASE_DIR = 'metrics'
 PLOTS_DIR = 'plots'
-TARGET_STEPS = ['step6', 'step6_dbl']
-TARGET_KERNEL_LENGTH = 33
+CSV_DIR = os.path.join(PLOTS_DIR, 'csv')
+TARGET_KERNEL_LENGTH = 33  # actual kernel length, e.g., 2*filter_radius+1
 
-# Regex for filenames
-FILENAME_REGEX = re.compile(r'out_(\d+)_(\d+)(?:_rep\d+)?$')
+# Regex for parsing logs: timestamp-run files
+FILENAME_REGEX = re.compile(r'.*-(?:run_\d+)\.log$')
 
 # Regex for parsing times from log files
 TIME_GPU_REGEX = re.compile(r'Time in GPU: ([\d\.]+)')
@@ -24,215 +25,230 @@ def parse_log_file(filepath):
     try:
         with open(filepath, 'r') as f:
             content = f.read()
-
         gpu_time_match = TIME_GPU_REGEX.search(content)
         cpu_time_match = TIME_CPU_REGEX.search(content)
-
         gpu_time = float(gpu_time_match.group(1)) if gpu_time_match else None
         cpu_time = float(cpu_time_match.group(1)) if cpu_time_match else None
-
         return gpu_time, cpu_time
     except Exception as e:
-        print(f"Error parsing file {filepath}: {e}")
+        print(f"Error parsing {filepath}: {e}")
         return None, None
 
 
-def collect_data(output_dir, step_name):
-    """Collects GPU/CPU measurements from all runs inside step folders."""
+def collect_data(output_base_dir):
+    """
+    Collects GPU/CPU times from all metrics runs in the folder structure.
+    Adjusted to handle structure: base_dir / config_dir / logfiles
+    """
     data = []
 
-    step_path = os.path.join(output_dir, step_name)
-    if not os.path.isdir(step_path):
-        print(f"Warning: Directory '{step_path}' not found. Skipping.")
+    if not os.path.isdir(output_base_dir):
+        print(f"Error: Output base directory '{output_base_dir}' does not exist.")
         return data
 
-    for first_level_dir in os.listdir(step_path):
-        first_level_path = os.path.join(step_path, first_level_dir)
-        if not os.path.isdir(first_level_path):
+    # Prompt user to select a subdirectory under metrics if multiple exist
+    subdirs = [d for d in os.listdir(output_base_dir) if os.path.isdir(os.path.join(output_base_dir, d))]
+    
+    # --- Start of user selection logic (Kept for completeness) ---
+    if not subdirs:
+        # If running on 'metrics/runtimes' directly, this might be skipped
+        selected_dir = "" 
+        print(f"No subdirectories found in '{output_base_dir}'. Proceeding with base directory.")
+    elif len(subdirs) == 1:
+        selected_dir = subdirs[0]
+    else:
+        print("Multiple metrics subdirectories found. Select one to plot:")
+        for idx, d in enumerate(subdirs, start=1):
+            print(f"{idx}) {d}")
+        while True:
+            try:
+                choice = int(input("Enter number: "))
+                if 1 <= choice <= len(subdirs):
+                    selected_dir = subdirs[choice - 1]
+                    break
+            except ValueError:
+                pass
+            print("Invalid selection. Try again.")
+            
+    if selected_dir:
+        output_base_dir = os.path.join(output_base_dir, selected_dir)
+        
+    print(f"Selected metrics folder: {output_base_dir}")
+    # --- End of user selection logic ---
+
+    # --- Start of Revised Data Collection Logic ---
+    # In the original script: 
+    #   Level 1: selected_dir (handled above)
+    #   Level 2: src_folder (e.g., 'default_run') - NO LONGER PRESENT
+    #   Level 3: config_dir (e.g., '16_1024') - THIS IS NOW LEVEL 2
+    
+    # Iterate over the config directories (e.g., '16_1024', '16_1024-dbl', etc.)
+    for config_dir in os.listdir(output_base_dir):
+        config_path = os.path.join(output_base_dir, config_dir)
+        
+        # Check if the item is a directory
+        if not os.path.isdir(config_path):
             continue
 
-        timestamp_dirs_to_check = []
-        exec_name = first_level_dir
+        # Check if the directory name matches the expected configuration regex
+        match = re.match(r'(\d+)_(\d+)(-nofmad)?(-dbl)?', config_dir)
+        if not match:
+            continue
 
-        # First level is a timestamp
-        if re.match(r'^\d{8}_\d{6}$', first_level_dir):
-            timestamp_dirs_to_check.append(first_level_path)
-            exec_name = step_name
-        else:
-            # First level is executable suffix, second has timestamps
-            for sub_dir in os.listdir(first_level_path):
-                if re.match(r'^\d{8}_\d{6}$', sub_dir):
-                    timestamp_dirs_to_check.append(os.path.join(first_level_path, sub_dir))
-
-        # Iterate through timestamp dirs
-        for timestamp_path in timestamp_dirs_to_check:
-            for filename in os.listdir(timestamp_path):
-                if not filename.startswith('out_'):
-                    continue
-
-                match = FILENAME_REGEX.match(filename)
-                if not match:
-                    continue
-
-                kernel_length = int(match.group(1))
-                image_size = int(match.group(2))
-
-                if kernel_length != TARGET_KERNEL_LENGTH:
-                    continue
-
-                filepath = os.path.join(timestamp_path, filename)
-
-                gpu_time, cpu_time = parse_log_file(filepath)
-                if gpu_time is not None and cpu_time is not None:
-                    data.append({
-                        'step': step_name,
-                        'kernel_length': kernel_length,
-                        'image_size': image_size,
-                        'gpu_time': gpu_time,
-                        'cpu_time': cpu_time,
-                        'executable': exec_name
-                    })
+        filter_radius = int(match.group(1))
+        image_size = int(match.group(2))
+        nofmad_flag = bool(match.group(3))
+        dbl_flag = bool(match.group(4))
+        
+        # We need a placeholder for the original 'src_folder' since it's used 
+        # later for plotting labels. We use the directory name of the runtimes folder.
+        # Example: 'runtimes' if the input was 'metrics/runtimes'
+        src_folder_placeholder = os.path.basename(output_base_dir)
+        
+        # Now, iterate through the log files directly inside the config directory
+        for logfile in os.listdir(config_path):
+            if not FILENAME_REGEX.match(logfile):
+                continue
+            
+            filepath = os.path.join(config_path, logfile)
+            gpu_time, cpu_time = parse_log_file(filepath)
+            
+            if gpu_time is not None and cpu_time is not None:
+                data.append({
+                    'src_folder': src_folder_placeholder, # Using the base folder name
+                    'filter_radius': filter_radius,
+                    'image_size': image_size,
+                    'gpu_time': gpu_time,
+                    'cpu_time': cpu_time,
+                    'nofmad': nofmad_flag,
+                    'dbl': dbl_flag,
+                    'logfile': logfile
+                })
 
     return data
+# --- End of Revised Data Collection Logic ---
 
 
-def generate_separate_plots(df):
-    """Plots separate GPU/CPU mean times with runtime annotations."""
-
+def generate_plots(df):
+    """Generates plots for GPU/CPU mean runtimes and saves CSV data with speedup and std dev."""
     os.makedirs(PLOTS_DIR, exist_ok=True)
-    df['image_size'] = df['image_size'].astype(int)
+    os.makedirs(CSV_DIR, exist_ok=True)
 
     plt.rcParams.update({
-        "font.size": 16,            # base font size
-        "axes.titlesize": 20,       # title size
-        "axes.labelsize": 18,       # axis label size
-        "xtick.labelsize": 16,      # tick label size
+        "font.size": 16,
+        "axes.titlesize": 20,
+        "axes.labelsize": 18,
+        "xtick.labelsize": 16,
         "ytick.labelsize": 16,
-        "legend.fontsize": 16,      # legend text
-        "lines.linewidth": 2.5,     # thicker lines
-        "lines.markersize": 10      # bigger points
+        "legend.fontsize": 16,
+        "lines.linewidth": 2.5,
+        "lines.markersize": 10
     })
 
-    # Group by step (step6, step6_dbl)
-    for step, group in df.groupby('step'):
-        group_sorted = group.sort_values(by='image_size')
+    # Label generation logic remains the same, using the placeholder 'src_folder'
+    df['label'] = df.apply(
+        lambda r: f"{r['src_folder']}{'-nofmad' if r['nofmad'] else ''}{'-dbl' if r['dbl'] else ''}", axis=1
+    )
 
-        fig, ax1 = plt.subplots(figsize=(12, 7))
+    # Define the scales to plot
+    y_scales = [
+        ('linear', 'linear'), # (matplotlib_scale, suffix_for_filename)
+        ('log', 'log2')
+    ]
 
-        # GPU mean time
-        line_gpu, = ax1.plot(
-            group_sorted['image_size'],
-            group_sorted['gpu_time_mean'],
-            marker='o',
-            linestyle='-',
-            color='tab:blue',
-            label='GPU Time (mean)'
+    for label, group in df.groupby('label'):
+        agg = (
+            group.groupby(['filter_radius', 'image_size'])
+                 .agg(
+                     gpu_time_mean=('gpu_time', 'mean'),
+                     cpu_time_mean=('cpu_time', 'mean'),
+                     gpu_time_std=('gpu_time', 'std'),
+                     cpu_time_std=('cpu_time', 'std'),
+                     count=('gpu_time', 'count')
+                 )
+                 .reset_index()
         )
 
-        # CPU mean time
-        line_cpu, = ax1.plot(
-            group_sorted['image_size'],
-            group_sorted['cpu_time_mean'],
-            marker='x',
-            linestyle='--',
-            color='tab:orange',
-            label='CPU Time (mean)'
+        agg[['gpu_time_std', 'cpu_time_std']] = agg[['gpu_time_std', 'cpu_time_std']].fillna(0)
+        
+        # Calculate speedup and standard deviation of speedup
+        agg['speedup'] = agg['cpu_time_mean'] / agg['gpu_time_mean']
+        # Error propagation formula for division (R = A/B): (sigma_R/R)^2 = (sigma_A/A)^2 + (sigma_B/B)^2
+        agg['speedup_std'] = agg['speedup'] * np.sqrt(
+            (agg['cpu_time_std'] / agg['cpu_time_mean'])**2 +
+            (agg['gpu_time_std'] / agg['gpu_time_mean'])**2
         )
 
-        # Annotate GPU & CPU runtimes on each point
-        for _, row in group_sorted.iterrows():
+        # Save CSV data once per label/group
+        csv_file = os.path.join(CSV_DIR, f"{label}_runtime_k{TARGET_KERNEL_LENGTH}.csv")
+        agg.to_csv(csv_file, index=False)
+        print(f"Saved CSV data: {csv_file}")
+        
+        # --- Plotting Loop for Scales ---
+        for mpl_scale, scale_suffix in y_scales:
+            fig, ax = plt.subplots(figsize=(12, 7))
+            
+            # Plot the data
+            ax.plot(agg['image_size'], agg['gpu_time_mean'], marker='o', linestyle='-', color='tab:blue', label='GPU Time')
+            ax.plot(agg['image_size'], agg['cpu_time_mean'], marker='x', linestyle='--', color='tab:orange', label='CPU Time')
 
-            gpu_label = f"{row['gpu_time_mean']:.4f}±{row['gpu_time_std']:.4f}s"
-            cpu_label = f"{row['cpu_time_mean']:.4f}±{row['cpu_time_std']:.4f}s"
+            # Only add text labels for the linear plot for readability
+            # if mpl_scale == 'linear':
+            #     for _, row in agg.iterrows():
+            #         ax.text(row['image_size'],
+            #                 row['gpu_time_mean'] - 4,
+            #                 f"{row['gpu_time_mean']:.4f}±{row['gpu_time_std']:.4f}",
+            #                 ha='center', va='bottom', color='tab:blue', fontsize=12,
+            #                 bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4"))
+            #         ax.text(row['image_size'],
+            #                 row['cpu_time_mean'] + (8 if row['cpu_time_mean'] < 25 else 4), # add padding
+            #                 f"{row['cpu_time_mean']:.4f}±{row['cpu_time_std']:.4f}",
+            #                 ha='center', va='top', color='tab:orange', fontsize=12,
+            #                 bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4"))
 
-            # GPU annotation
-            y_offset_gpu = -2.5
-            ax1.text(
-                row['image_size'],
-                row['gpu_time_mean'] + y_offset_gpu,
-                gpu_label,
-                ha='center',
-                va='bottom',
-                fontsize=12,
-                color='tab:blue',
-                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4")
-            )
+            filter_radius_val = agg['filter_radius'].iloc[0] if not agg.empty else '?'
+            title_prefix = "Doubles" if '-dbl' in label else "Floats"
+            
+            # Set Title, Labels, and Scales
+            ax.set_title(f"{title_prefix} – CPU/GPU Runtime (Filter radius: {filter_radius_val})")
+            ax.set_xlabel('Image Size (N)')
+            ax.set_ylabel('Runtime (seconds)')
+            
+            # Set X-scale to log2
+            ax.set_xscale('log', base=2)
+            
+            # Set Y-scale (New Logic)
+            if mpl_scale == 'log':
+                 ax.set_yscale('log', base=2)
+            else: # 'linear'
+                 ax.set_yscale('linear')
+                 
+            ax.grid(True, linestyle='--', axis='x')
+            ax.grid(True, linestyle=':', axis='y', which='both') # Add y-grid for log scale too
 
-            # CPU annotation
-            y_offset_cpu = 2.5
-            ax1.text(
-                row['image_size'],
-                row['cpu_time_mean'] + y_offset_cpu,
-                cpu_label,
-                ha='center',
-                va='top',
-                fontsize=12,
-                color='tab:orange',
-                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4")
-            )
+            ticks = sorted(agg['image_size'].unique())
+            if ticks:
+                ax.set_xticks(ticks)
+                ax.get_xaxis().set_major_formatter(plt.FormatStrFormatter('%d'))
 
-        title_prefix = "Doubles" if "_dbl" in step else "Floats"
-        ax1.set_title(f'{title_prefix} – CPU/GPU Runtime (Filter radius: {math.floor(TARGET_KERNEL_LENGTH / 2)})')
-        ax1.set_xlabel('Image Size (N)')
-        ax1.set_ylabel('Runtime (seconds)')
-        ax1.grid(True, linestyle='--', axis='x')
-        plt.xscale('log', base=2)
-
-        if not group_sorted['image_size'].empty:
-            ticks = sorted(group_sorted['image_size'].unique())
-            ax1.set_xticks(ticks)
-            ax1.get_xaxis().set_major_formatter(plt.FormatStrFormatter('%d'))
-
-        ax1.legend(loc='upper left')
-        plt.tight_layout()
-
-        plot_path = os.path.join(PLOTS_DIR, f'{step}_runtime_k{TARGET_KERNEL_LENGTH}.png')
-        plt.savefig(plot_path)
-        plt.show()
-
-        print(f"Saved plot for {step} to {plot_path}")
+            ax.legend(loc='upper left')
+            plt.tight_layout()
+            
+            # Save the plot with the scale suffix
+            plot_file = os.path.join(PLOTS_DIR, f"{label}_runtime_k{TARGET_KERNEL_LENGTH}_{scale_suffix}.png")
+            plt.savefig(plot_file)
+            plt.close(fig)
+            print(f"Saved plot for {label} with {scale_suffix} scale to {plot_file}")
 
 
 if __name__ == '__main__':
-    # Command line argument for output dir
-    if len(sys.argv) > 1:
-        OUTPUT_BASE_DIR = sys.argv[1]
-        print(f"Using custom output directory: {OUTPUT_BASE_DIR}")
-    else:
-        OUTPUT_BASE_DIR = DEFAULT_OUTPUT_BASE_DIR
-        print(f"Using default output directory: {OUTPUT_BASE_DIR}")
+    base_dir = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUTPUT_BASE_DIR
+    print(f"Base metrics directory: {base_dir}")
 
-    # Ensure output directory exists
-    if not os.path.isdir(OUTPUT_BASE_DIR):
-        print(f"Error: Provided output directory '{OUTPUT_BASE_DIR}' does not exist.")
+    all_data = collect_data(base_dir)
+    if not all_data:
+        print("No data found in the selected metrics folder.")
         sys.exit(1)
 
-    all_data = []
-
-    # Collect data from all target steps
-    for step in TARGET_STEPS:
-        print(f"Collecting data for Kernel Length {TARGET_KERNEL_LENGTH} from {OUTPUT_BASE_DIR}/{step}...")
-        all_data.extend(collect_data(OUTPUT_BASE_DIR, step))
-
-    if not all_data:
-        print("Error: No data found. Check your directory structure.")
-    else:
-        df = pd.DataFrame(all_data)
-
-        # Compute mean & std dev per (step, kernel_length, image_size)
-        df_agg = (
-            df.groupby(['step', 'kernel_length', 'image_size'])
-              .agg(
-                  gpu_time_mean=('gpu_time', 'mean'),
-                  cpu_time_mean=('cpu_time', 'mean'),
-                  gpu_time_std=('gpu_time', 'std'),
-                  cpu_time_std=('cpu_time', 'std'),
-                  count=('gpu_time', 'count')
-              )
-              .reset_index()
-        )
-
-        # Fix NaN std dev for groups with only 1 run
-        df_agg[['gpu_time_std', 'cpu_time_std']] = df_agg[['gpu_time_std', 'cpu_time_std']].fillna(0)
-
-        generate_separate_plots(df_agg)
+    df = pd.DataFrame(all_data)
+    generate_plots(df)
