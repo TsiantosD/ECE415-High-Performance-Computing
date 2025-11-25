@@ -175,7 +175,7 @@ fi
 mkdir -p "$FILTER_IMAGE_DIR"
 
 echo "------------------------ EXECUTION ------------------------"
-echo "Filter radius: $FILTER_RADIUS
+echo "Filter radius: $FILTER_RADIUS"
 echo "Image size:    $IMAGE_SIZE_INPUT"
 echo "Repeat count:  $REPEAT_COUNT"
 echo "Output folder: $FILTER_IMAGE_DIR"
