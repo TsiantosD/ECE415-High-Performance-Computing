@@ -147,22 +147,37 @@ def plot_from_csv():
     """
     Read CSV files from CSV_DIR and plot them.
     """
-    csv_files = [f for f in os.listdir(CSV_DIR) if f.endswith(".csv") and f != "all_data.csv"]
+
+    # Only select CSVs that contain max_diff
+    csv_files = []
+    for f in os.listdir(CSV_DIR):
+        if not f.endswith(".csv") or f == "all_data.csv":
+            continue
+        try:
+            df_tmp = pd.read_csv(os.path.join(CSV_DIR, f), nrows=1)
+            if "max_diff" in df_tmp.columns:
+                csv_files.append(f)
+        except Exception:
+            continue
 
     if not csv_files:
-        print("No CSV files found in /csv to plot.")
+        print("No precision CSV files found in /csv.")
         return
 
     for csv_file in csv_files:
         path = os.path.join(CSV_DIR, csv_file)
         df = pd.read_csv(path)
 
+        if "max_diff" not in df.columns:
+            print(f"Skipping non-precision CSV: {csv_file}")
+            continue
+
         if df.empty:
             continue
 
         label = csv_file.replace(".csv", "")
 
-        # Aggregate
+        # Aggregate (though for 1 run STD is zero)
         agg = df.groupby("filter_radius").agg(
             max_diff_mean=("max_diff", "mean"),
             max_diff_std=("max_diff", "std")

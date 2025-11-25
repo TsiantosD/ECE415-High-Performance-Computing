@@ -161,19 +161,39 @@ def plot_from_csv():
         "lines.markersize": 10
     })
 
-    csv_files = [f for f in os.listdir(CSV_DIR) if f.endswith(".csv")]
+    # Only consider runtime CSV files
+    csv_files = [
+        f for f in os.listdir(CSV_DIR)
+        if f.endswith(".csv") and "_runtime_" in f
+    ]
 
     if not csv_files:
-        print("No CSV files found in plots/csv/. Nothing to plot.")
+        print("No runtime CSV files found in plots/csv/. Nothing to plot.")
         return
 
-    for csv_file in csv_files:
-        label = csv_file.replace(".csv", "")
-        df = pd.read_csv(os.path.join(CSV_DIR, csv_file))
+    required_cols = {
+        "filter_radius", "image_size",
+        "gpu_time_mean", "cpu_time_mean",
+        "gpu_time_std", "cpu_time_std",
+        "speedup", "speedup_std"
+    }
 
-        if df.empty:
+    for csv_file in csv_files:
+        path = os.path.join(CSV_DIR, csv_file)
+        df = pd.read_csv(path)
+
+        # Validate columns
+        if not required_cols.issubset(df.columns):
+            print(f"[Skipping] {csv_file} (missing required runtime columns)")
             continue
 
+        if df.empty:
+            print(f"[Skipping] {csv_file} (empty file)")
+            continue
+
+        label = csv_file.replace(".csv", "")
+
+        # Two y-scale styles
         y_scales = [
             ("linear", "linear"),
             ("log", "log2"),
@@ -182,8 +202,11 @@ def plot_from_csv():
         for mpl_scale, suffix in y_scales:
             fig, ax = plt.subplots(figsize=(12, 7))
 
-            ax.plot(df["image_size"], df["gpu_time_mean"], marker="o", linestyle="-", label="GPU Time")
-            ax.plot(df["image_size"], df["cpu_time_mean"], marker="x", linestyle="--", label="CPU Time")
+            # --- Plotting CPU/GPU runtime curves ---
+            ax.plot(df["image_size"], df["gpu_time_mean"],
+                    marker="o", linestyle="-", label="GPU Time")
+            ax.plot(df["image_size"], df["cpu_time_mean"],
+                    marker="x", linestyle="--", label="CPU Time")
 
             filter_radius_val = df["filter_radius"].iloc[0]
             title_prefix = "Doubles" if "dbl" in label else "Floats"
