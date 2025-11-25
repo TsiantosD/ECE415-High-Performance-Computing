@@ -23,7 +23,7 @@ USE_DOUBLES ?= 0
 
 # Standard Compilation Flags
 # Note: Use FMAD=false to prevent fp precision loss if needed
-COMMON_FLAGS := -O4 -fmad=$(FMAD) -DUSE_DOUBLES=$(USE_DOUBLES) -Xcompiler -fopenmp
+COMMON_FLAGS := -O4 -fmad=$(FMAD) -DUSE_DOUBLES=$(USE_DOUBLES)
 
 # Debugging Flags
 DEBUG_FLAGS := -g -G

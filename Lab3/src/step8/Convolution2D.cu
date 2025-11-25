@@ -88,7 +88,6 @@ void convolutionRowCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h_Fi
 
     int x, y, k;
     
-    #pragma omp parallel for private(x, y, k)
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
             PixelScalar sum = 0;
@@ -114,7 +113,6 @@ void convolutionColumnCPU(PixelScalar *h_Dst, PixelScalar *h_Src, PixelScalar *h
 
     int x, y, k;
 
-    #pragma omp parallel for private(x, y, k)
     for (y = 0; y < imageH; y++) {
         for (x = 0; x < imageW; x++) {
             PixelScalar sum = 0;
@@ -177,7 +175,6 @@ int main(int argc, char **argv) {
     int size, paddedSize;
     unsigned int i, filterRadius;
     int correctOutput = 1;
-    PixelScalar maxDiff = 0;
 	struct timespec  tv1, tv2;
     
     printf("Using scalar with sizeof: %lubytes\n", sizeof(PixelScalar));
@@ -269,7 +266,6 @@ int main(int argc, char **argv) {
         for (int x = 0; x < imageW; x++) {
             int index = y * imageW + x;
             PixelScalar diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
-            maxDiff = diff > maxDiff ? diff : maxDiff;
 
             if (diff > accuracy) {
 		        correctOutput = 0;
@@ -281,7 +277,6 @@ int main(int argc, char **argv) {
     if (correctOutput)
         printf("Results correct!\n");
 
-    printf("Max difference: %.15lf\n", maxDiff);
     printf("Time in GPU: %f\n", timer.Elapsed()/1000);
     printf("Time in CPU: %lf\n", (double) (tv2.tv_nsec - tv1.tv_nsec) / 1.0E9 + (double) (tv2.tv_sec - tv1.tv_sec));
 
