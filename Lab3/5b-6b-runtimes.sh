@@ -33,6 +33,7 @@ if [ "$RUN_FLOATS" = true ]; then
             --filter-radius "$FILTER_RADIUS" \
             --image-size "$SIZE" \
             --repeat "$REPEAT" \
+            --use-doubles false \
             --output-dir runtimes
     done
 fi
@@ -48,7 +49,7 @@ if [ "$RUN_DOUBLES" = true ]; then
             --filter-radius "$FILTER_RADIUS" \
             --image-size "$SIZE" \
             --repeat "$REPEAT" \
-            --use-doubles \
+            --use-doubles true \
             --output-dir runtimes
     done
 fi
