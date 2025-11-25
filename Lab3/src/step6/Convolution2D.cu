@@ -76,6 +76,7 @@ void cleanUp(ErrorCode exitCode) {
     free(h_Input);
     free(h_Buffer);
     free(h_OutputCPU);
+    free(h_OutputGPU);
 
     cudaDeviceReset();
     exit(exitCode);
