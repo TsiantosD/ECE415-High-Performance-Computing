@@ -45,11 +45,7 @@ typedef enum {
     NORMAL = 0
 } ErrorCode;
 
-#ifdef USE_DOUBLES
-typedef double PixelScalar;
-#else
 typedef float PixelScalar;
-#endif
 unsigned int filter_radius;
 
 PixelScalar
@@ -168,7 +164,6 @@ int main(int argc, char **argv) {
     int imageH;
     unsigned int i;
     int correctOutput = 1;
-    PixelScalar maxDiff = 0;
     
     printf("Enter filter radius : ");
     CHECK_SCANF(scanf("%d", &filter_radius));
@@ -245,7 +240,6 @@ int main(int argc, char **argv) {
         for (int x = 0; x < imageW; x++) {
             int index = y * imageW + x;
             PixelScalar diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
-            maxDiff = diff > maxDiff ? diff : maxDiff;
 
             if (diff > accuracy) {
 		        correctOutput = 0;

@@ -19,7 +19,7 @@ SRC := Convolution2D.cu
 FMAD ?= true
 
 # Use of doubles or floats
-USE_DOUBLES ?= 0
+USE_DOUBLES ?= 1
 
 # Standard Compilation Flags
 # Note: Use FMAD=false to prevent fp precision loss if needed

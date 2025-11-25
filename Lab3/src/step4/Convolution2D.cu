@@ -47,11 +47,7 @@ typedef enum {
     NORMAL = 0
 } ErrorCode;
 
-#ifdef USE_DOUBLES
-typedef double PixelScalar;
-#else
 typedef float PixelScalar;
-#endif
 unsigned int filter_radius;
 
 PixelScalar
@@ -62,14 +58,12 @@ PixelScalar
     *h_OutputGPU = NULL,
     *d_Filter = NULL,
     *d_Input = NULL,
-    *d_Buffer = NULL,
-    *d_Output = NULL;
+    *d_Buffer = NULL;
 
 void cleanUp(ErrorCode exitCode) {
     cudaFree(d_Filter);
     cudaFree(d_Input);
     cudaFree(d_Buffer);
-    cudaFree(d_Output);
     free(h_Filter);
     free(h_Input);
     free(h_Buffer);
@@ -174,7 +168,6 @@ int main(int argc, char **argv) {
     int imageH;
     unsigned int i;
     int correctOutput = 1;
-    PixelScalar maxDiff = 0;
     
     printf("Enter filter radius : ");
     CHECK_SCANF(scanf("%d", &filter_radius));
@@ -209,8 +202,6 @@ int main(int argc, char **argv) {
     CUDA_CHECK_LAST_ERROR();
     cudaMalloc((void **) &d_Buffer, imageW * imageH * sizeof(PixelScalar));
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc((void **) &d_Output, imageW * imageH * sizeof(PixelScalar));
-    CUDA_CHECK_LAST_ERROR();
 
     //* Initialise random arrays
 
@@ -233,7 +224,7 @@ int main(int argc, char **argv) {
     printf("GPU computation...\n");
     convolutionRowGPU<<<dimGrid, dimBlock>>>(d_Buffer, d_Input, d_Filter, imageW, imageH, filter_radius);
     cudaDeviceSynchronize();
-    convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Output, d_Buffer, d_Filter, imageW, imageH, filter_radius);
+    convolutionColumnGPU<<<dimGrid, dimBlock>>>(d_Input, d_Buffer, d_Filter, imageW, imageH, filter_radius);
 
     //! 'Fall through' Let Host run concurrently with Device
 
@@ -243,7 +234,7 @@ int main(int argc, char **argv) {
 
     //* Transfer data from Device back to Host memory
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(h_OutputGPU, d_Output, imageW * imageH * sizeof(PixelScalar), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_OutputGPU, d_Input, imageW * imageH * sizeof(PixelScalar), cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
     
     //* Perform comparison between GPU / CPU results
@@ -251,19 +242,19 @@ int main(int argc, char **argv) {
         for (int x = 0; x < imageW; x++) {
             int index = y * imageW + x;
             PixelScalar diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
-            maxDiff = diff > maxDiff ? diff : maxDiff;
 
             if (diff > accuracy) {
 		        correctOutput = 0;
                 break;
             }
         }
+
+        if (!correctOutput)
+            break;
     }
 
     if (correctOutput)
         printf("Results correct!\n");
-
-    printf("Max difference: %.15lf\n", maxDiff);
 
     // Do a device reset just in case... Bgalte to sxolio otan ylopoihsete CUDA
     cleanUp(NORMAL);
