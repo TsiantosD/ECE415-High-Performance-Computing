@@ -34,7 +34,7 @@ if [ "$RUN_FLOATS" = true ]; then
             --image-size "$SIZE" \
             --repeat "$REPEAT" \
             --use-doubles false \
-            --output-dir runtimes
+            --output-dir 5b-runtimes
     done
 fi
 
@@ -50,6 +50,6 @@ if [ "$RUN_DOUBLES" = true ]; then
             --image-size "$SIZE" \
             --repeat "$REPEAT" \
             --use-doubles true \
-            --output-dir runtimes
+            --output-dir 6b-runtimes
     done
 fi

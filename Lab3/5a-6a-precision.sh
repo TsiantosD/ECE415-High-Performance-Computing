@@ -36,7 +36,7 @@ if [ "$RUN_FLOATS" = true ]; then
             --image-size "$IMAGE_SIZE" \
             --repeat "$REPEAT" \
             --use-doubles false \
-            --output-dir precision
+            --output-dir 5a-precision
     done
 fi
 
@@ -52,6 +52,6 @@ if [ "$RUN_DOUBLES" = true ]; then
             --image-size "$IMAGE_SIZE" \
             --repeat "$REPEAT" \
             --use-doubles true \
-            --output-dir precision
+            --output-dir 5b-precision
     done
 fi
