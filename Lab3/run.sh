@@ -139,7 +139,6 @@ fi
 # ---------------------------
 FULL_SRC_DIR="$SOURCE_DIR/$SRC_DIR"
 TARGET_EXEC="./$FULL_SRC_DIR/$PROGRAM_NAME"
-FILTER_LEN=$((2 * FILTER_RADIUS + 1))
 
 OPTION_SUFFIX=""
 [ "$DISABLE_FMAD" = true ] && OPTION_SUFFIX="${OPTION_SUFFIX}-nofmad"
@@ -176,7 +175,7 @@ fi
 mkdir -p "$FILTER_IMAGE_DIR"
 
 echo "------------------------ EXECUTION ------------------------"
-echo "Filter radius: $FILTER_RADIUS → Kernel size: $FILTER_LEN"
+echo "Filter radius: $FILTER_RADIUS"
 echo "Image size:    $IMAGE_SIZE_INPUT"
 echo "Repeat count:  $REPEAT_COUNT"
 echo "Output folder: $FILTER_IMAGE_DIR"
@@ -184,7 +183,7 @@ echo "Output folder: $FILTER_IMAGE_DIR"
 for (( j=1; j<=REPEAT_COUNT; j++ )); do
     TIMESTAMP=$(date +"%Y%m%d_%H%M%S_%3N")
     FILEPATH="${FILTER_IMAGE_DIR}/${TIMESTAMP}-run_${j}.log"
-    echo "$FILTER_LEN $IMAGE_SIZE_INPUT" | "$TARGET_EXEC" > "$FILEPATH" 2>&1
+    echo "$FILTER_RADIUS $IMAGE_SIZE_INPUT" | "$TARGET_EXEC" > "$FILEPATH" 2>&1
     echo "Run $j/$REPEAT_COUNT → $(basename $FILEPATH)"
     sleep 0.01
 done

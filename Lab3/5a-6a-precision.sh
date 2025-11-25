@@ -2,7 +2,6 @@
 
 # ================= CONFIGURATION =================
 IMAGE_SIZE=1024
-REPEAT=10
 
 # Power-of-two kernel radii
 RADII=(1 2 4 8 16 32 64 128 256)
@@ -34,9 +33,8 @@ if [ "$RUN_FLOATS" = true ]; then
             --src-dir step6 \
             --filter-radius "$R" \
             --image-size "$IMAGE_SIZE" \
-            --repeat "$REPEAT" \
             --use-doubles false \
-            --output-dir precision
+            --output-dir 5a-precision
     done
 fi
 
@@ -50,8 +48,7 @@ if [ "$RUN_DOUBLES" = true ]; then
             --src-dir step6 \
             --filter-radius "$R" \
             --image-size "$IMAGE_SIZE" \
-            --repeat "$REPEAT" \
             --use-doubles true \
-            --output-dir precision
+            --output-dir 6a-precision
     done
 fi

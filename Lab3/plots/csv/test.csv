@@ -1,0 +1,3 @@
+src_folder,filter_radius,image_size,nofmad,dbl,logfile,max_diff,label
+test,256,1024,False,False,20251125_184911_361-run_1.log,640.0,test
+test,16,1024,False,False,20251125_184833_251-run_1.log,3.0,test

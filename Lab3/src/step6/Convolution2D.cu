@@ -176,6 +176,7 @@ int main(int argc, char **argv) {
     int imageH;
     unsigned int i;
     int correctOutput = 1;
+    PixelScalar maxDiff = 0;
 	struct timespec  tv1, tv2;
     
     printf("Using scalar of size: %lubytes\n", sizeof(PixelScalar));
@@ -258,20 +259,18 @@ int main(int argc, char **argv) {
         for (int x = 0; x < imageW; x++) {
             int index = y * imageW + x;
             PixelScalar diff = ABS(h_OutputCPU[index] - h_OutputGPU[index]);
+            maxDiff = diff > maxDiff ? diff : maxDiff;
 
             if (diff > accuracy) {
 		        correctOutput = 0;
-                break;
             }
         }
-
-        if (!correctOutput)
-            break;
     }
 
     if (correctOutput)
         printf("Results correct!\n");
 
+    printf("Max difference: %.15f\n", (double)maxDiff);
     printf("Time in GPU: %f\n", timer.Elapsed()/1000);
     printf("Time in CPU: %lf\n", (double) (tv2.tv_nsec - tv1.tv_nsec) / 1.0E9 + (double) (tv2.tv_sec - tv1.tv_sec));
 
