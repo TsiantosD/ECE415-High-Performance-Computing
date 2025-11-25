@@ -150,6 +150,12 @@ def generate_plots(df):
         lambda r: f"{r['src_folder']}{'-nofmad' if r['nofmad'] else ''}{'-dbl' if r['dbl'] else ''}", axis=1
     )
 
+    # Define the scales to plot
+    y_scales = [
+        ('linear', 'linear'), # (matplotlib_scale, suffix_for_filename)
+        ('log', 'log2')
+    ]
+
     for label, group in df.groupby('label'):
         agg = (
             group.groupby(['filter_radius', 'image_size'])
@@ -173,45 +179,66 @@ def generate_plots(df):
             (agg['gpu_time_std'] / agg['gpu_time_mean'])**2
         )
 
+        # Save CSV data once per label/group
         csv_file = os.path.join(CSV_DIR, f"{label}_runtime_k{TARGET_KERNEL_LENGTH}.csv")
         agg.to_csv(csv_file, index=False)
         print(f"Saved CSV data: {csv_file}")
+        
+        # --- Plotting Loop for Scales ---
+        for mpl_scale, scale_suffix in y_scales:
+            fig, ax = plt.subplots(figsize=(12, 7))
+            
+            # Plot the data
+            ax.plot(agg['image_size'], agg['gpu_time_mean'], marker='o', linestyle='-', color='tab:blue', label='GPU Time')
+            ax.plot(agg['image_size'], agg['cpu_time_mean'], marker='x', linestyle='--', color='tab:orange', label='CPU Time')
 
-        fig, ax = plt.subplots(figsize=(12, 7))
-        ax.plot(agg['image_size'], agg['gpu_time_mean'], marker='o', linestyle='-', color='tab:blue', label='GPU Time')
-        ax.plot(agg['image_size'], agg['cpu_time_mean'], marker='x', linestyle='--', color='tab:orange', label='CPU Time')
+            # Only add text labels for the linear plot for readability
+            # if mpl_scale == 'linear':
+            #     for _, row in agg.iterrows():
+            #         ax.text(row['image_size'],
+            #                 row['gpu_time_mean'] - 4,
+            #                 f"{row['gpu_time_mean']:.4f}±{row['gpu_time_std']:.4f}",
+            #                 ha='center', va='bottom', color='tab:blue', fontsize=12,
+            #                 bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4"))
+            #         ax.text(row['image_size'],
+            #                 row['cpu_time_mean'] + (8 if row['cpu_time_mean'] < 25 else 4), # add padding
+            #                 f"{row['cpu_time_mean']:.4f}±{row['cpu_time_std']:.4f}",
+            #                 ha='center', va='top', color='tab:orange', fontsize=12,
+            #                 bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4"))
 
-        for _, row in agg.iterrows():
-            ax.text(row['image_size'],
-                    row['gpu_time_mean'] - 4,
-                    f"{row['gpu_time_mean']:.4f}±{row['gpu_time_std']:.4f}",
-                    ha='center', va='bottom', color='tab:blue', fontsize=12,
-                    bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4"))
-            ax.text(row['image_size'],
-                    row['cpu_time_mean'] + (8 if row['cpu_time_mean'] < 25 else 4), # add padding
-                    f"{row['cpu_time_mean']:.4f}±{row['cpu_time_std']:.4f}",
-                    ha='center', va='top', color='tab:orange', fontsize=12,
-                    bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle="round,pad=0.4"))
+            filter_radius_val = agg['filter_radius'].iloc[0] if not agg.empty else '?'
+            title_prefix = "Doubles" if '-dbl' in label else "Floats"
+            
+            # Set Title, Labels, and Scales
+            ax.set_title(f"{title_prefix} – CPU/GPU Runtime (Filter radius: {filter_radius_val})")
+            ax.set_xlabel('Image Size (N)')
+            ax.set_ylabel('Runtime (seconds)')
+            
+            # Set X-scale to log2
+            ax.set_xscale('log', base=2)
+            
+            # Set Y-scale (New Logic)
+            if mpl_scale == 'log':
+                 ax.set_yscale('log', base=2)
+            else: # 'linear'
+                 ax.set_yscale('linear')
+                 
+            ax.grid(True, linestyle='--', axis='x')
+            ax.grid(True, linestyle=':', axis='y', which='both') # Add y-grid for log scale too
 
-        filter_radius_val = agg['filter_radius'].iloc[0] if not agg.empty else '?'
-        title_prefix = "Doubles" if '-dbl' in label else "Floats"
-        ax.set_title(f"{title_prefix} – CPU/GPU Runtime (Filter radius: {filter_radius_val})")
-        ax.set_xlabel('Image Size (N)')
-        ax.set_ylabel('Runtime (seconds)')
-        ax.set_xscale('log', base=2)
-        ax.grid(True, linestyle='--', axis='x')
+            ticks = sorted(agg['image_size'].unique())
+            if ticks:
+                ax.set_xticks(ticks)
+                ax.get_xaxis().set_major_formatter(plt.FormatStrFormatter('%d'))
 
-        ticks = sorted(agg['image_size'].unique())
-        if ticks:
-            ax.set_xticks(ticks)
-            ax.get_xaxis().set_major_formatter(plt.FormatStrFormatter('%d'))
-
-        ax.legend(loc='upper left')
-        plt.tight_layout()
-        plot_file = os.path.join(PLOTS_DIR, f"{label}_runtime_k{TARGET_KERNEL_LENGTH}.png")
-        plt.savefig(plot_file)
-        plt.close(fig)
-        print(f"Saved plot for {label} to {plot_file}")
+            ax.legend(loc='upper left')
+            plt.tight_layout()
+            
+            # Save the plot with the scale suffix
+            plot_file = os.path.join(PLOTS_DIR, f"{label}_runtime_k{TARGET_KERNEL_LENGTH}_{scale_suffix}.png")
+            plt.savefig(plot_file)
+            plt.close(fig)
+            print(f"Saved plot for {label} with {scale_suffix} scale to {plot_file}")
 
 
 if __name__ == '__main__':
