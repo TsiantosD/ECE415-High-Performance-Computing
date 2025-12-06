@@ -1,0 +1,4 @@
+venv
+main
+*.o
+*.pgm
