@@ -1,4 +1,5 @@
 venv
 main
+clahe_app
 *.o
 *.pgm

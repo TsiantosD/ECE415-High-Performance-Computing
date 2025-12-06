@@ -2,66 +2,83 @@
 
 # --- Configuration ---
 INPUT_FILE="$1"
-OUTPUT_PGM="output.pgm"
 # IMPORTANT: This must match the 'TARGET' name inside your Makefile
-C_EXEC="main" 
+C_EXEC="./main" 
 VENV_DIR="./venv"
 VENV_PYTHON="$VENV_DIR/bin/python3"
+OUTPUT_DIR="../Output"
 
 # --- 1. Validation ---
 if [ -z "$INPUT_FILE" ]; then
-    echo "Usage: ./run.sh <input_image.pgm>"
+    echo "Usage: ./run.sh <path_to_input.pgm>"
     exit 1
 fi
 
-# --- 2. Virtual Environment Setup ---
+# --- 2. Dynamic Filename Logic ---
+# Extract filename: "../Images/fort.pgm" -> "fort.pgm"
+FULL_FILENAME=$(basename -- "$INPUT_FILE")
+# Remove extension: "fort.pgm" -> "fort"
+BASENAME="${FULL_FILENAME%.*}"
+
+# Prepare the Output Directory first
+if [ ! -d "$OUTPUT_DIR" ]; then
+    echo "📂 Creating Output directory: $OUTPUT_DIR"
+    mkdir -p "$OUTPUT_DIR"
+fi
+
+# Point the Output PGM directly to ../Output/
+# Name: "../Output/fort_out.pgm"
+OUTPUT_PGM="$OUTPUT_DIR/${BASENAME}_out.pgm"
+
+# --- 3. Virtual Environment Setup ---
 if [ ! -d "$VENV_DIR" ]; then
     echo "📦 Creating isolated Python virtual environment..."
     python3 -m venv "$VENV_DIR" --without-pip
 fi
 
-# --- 3. Pip Self-Repair ---
+# --- 4. Pip Self-Repair ---
 $VENV_PYTHON -m pip --version > /dev/null 2>&1
 if [ $? -ne 0 ]; then
-    echo "🔧 Pip is missing. Bootstrapping pip into venv..."
+    echo "🔧 Pip is missing. Bootstrapping pip..."
     python3 -c "import urllib.request; urllib.request.urlretrieve('https://bootstrap.pypa.io/get-pip.py', 'get-pip.py')"
-    $VENV_PYTHON get-pip.py
+    $VENV_PYTHON get-pip.py > /dev/null
     rm get-pip.py
-    echo "✅ Pip installed successfully."
 fi
 
-# --- 4. Install Libraries ---
-echo "🔍 Checking for Pillow library..."
-$VENV_PYTHON -m pip install pillow > /dev/null
+# --- 5. Install Libraries ---
+$VENV_PYTHON -c "import PIL" 2>/dev/null
 if [ $? -ne 0 ]; then
-    echo "❌ Error: Failed to install Pillow. Check internet connection."
-    exit 1
+    echo "🔍 Installing Pillow..."
+    $VENV_PYTHON -m pip install pillow > /dev/null
 fi
 
-# --- 5. C Compilation (Using Makefile) ---
-echo "⚙️  Compiling C code using Make..."
-# We run 'make' (which runs the 'all' rule by default)
+# --- 6. C Compilation ---
+echo "⚙️  Compiling C code..."
 make
 
-# Check if make succeeded
 if [ $? -ne 0 ]; then
-    echo "❌ Compilation failed. Check your Makefile."
+    echo "❌ Compilation failed."
     exit 1
 fi
 
-# --- 6. Execution Pipeline ---
-echo "🚀 Running CLAHE C implementation..."
-./$C_EXEC "$INPUT_FILE" "$OUTPUT_PGM"
+# --- 7. Execution Pipeline ---
+echo "🚀 Running CLAHE on $INPUT_FILE..."
+
+# Run C binary. 
+# C Program will write DIRECTLY to ../Output/fort_out.pgm
+$C_EXEC "$INPUT_FILE" "$OUTPUT_PGM"
 
 if [ -f "$OUTPUT_PGM" ]; then
     echo "🎨 Converting result to PNG..."
+    
+    # Pass "../Output/fort_out.pgm" to Python
     $VENV_PYTHON convert.py "$OUTPUT_PGM"
     
-    # # --- Cleanup ---
-    # echo "🧹 Cleaning up..."
-    # rm "$OUTPUT_PGM"     # Remove intermediate image
-    # make clean           # Remove executable and object files (.o)
-    echo "✨ Done."
+    # --- Cleanup ---
+    # Optional: Delete the PGM (if you only want the PNG)
+    # rm "$OUTPUT_PGM" 
+    
+    echo "✨ Done. Result located in $OUTPUT_DIR"
 else
     echo "❌ C Program failed to generate output."
     exit 1

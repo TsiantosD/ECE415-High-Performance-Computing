@@ -8,25 +8,25 @@ def convert_pgm_to_png(input_path):
         return
 
     try:
-        # 1. Define Output Directory (One level up, then into Outputs)
-        # using os.path.join ensures it works on Windows/Linux/Mac
-        output_dir = os.path.join(os.getcwd(), "../Output")
-        
-        # 2. Create directory if it doesn't exist
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-            print(f"📂 Created directory: {output_dir}")
+        # 1. Determine Output Location
+        # Since run.sh now puts the PGM inside ../Output/, 
+        # we simply save the PNG in the SAME directory as the input PGM.
+        output_dir = os.path.dirname(input_path)
 
-        # 3. Construct new filename
-        # Extract filename (e.g. "output.pgm") and change extension to ".png"
-        base_name = os.path.splitext(os.path.basename(input_path))[0]
+        # 2. Construct Filename
+        # Input: "../Output/fort_out.pgm" 
+        # Base:  "fort_out"
+        filename_only = os.path.basename(input_path)
+        base_name = os.path.splitext(filename_only)[0]
+        
+        # Output: "../Output/fort_out.png"
         output_filename = f"{base_name}.png"
         output_path = os.path.join(output_dir, output_filename)
         
-        # 4. Save
+        # 3. Save
         with Image.open(input_path) as img:
             img.save(output_path)
-            print(f"✔ Success: Saved image to {output_path}")
+            print(f"✔ Success: PNG saved to {output_path}")
             
     except Exception as e:
         print(f"✘ Error converting {input_path}: {e}")
