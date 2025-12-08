@@ -33,16 +33,7 @@ OUTPUT_PGM="$OUTPUT_DIR/${BASENAME}_out.pgm"
 # --- 3. Virtual Environment Setup ---
 if [ ! -d "$VENV_DIR" ]; then
     echo "📦 Creating isolated Python virtual environment..."
-    python3 -m venv "$VENV_DIR" --without-pip
-fi
-
-# --- 4. Pip Self-Repair ---
-$VENV_PYTHON -m pip --version > /dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "🔧 Pip is missing. Bootstrapping pip..."
-    python3 -c "import urllib.request; urllib.request.urlretrieve('https://bootstrap.pypa.io/get-pip.py', 'get-pip.py')"
-    $VENV_PYTHON get-pip.py > /dev/null
-    rm get-pip.py
+    python3 -m venv "$VENV_DIR" 
 fi
 
 # --- 5. Install Libraries ---
