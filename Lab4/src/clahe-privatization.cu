@@ -112,7 +112,7 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
     __syncthreads();
 
     if (i < 256) {
-        all_luts[threadIdx.y * blockDim.x + threadIdx.x + i] = priv_lut[i];
+        all_luts[blockIdx.y * gridDim.x + blockIdx.x + i] = priv_lut[i];
     }
     __syncthreads();
 }
