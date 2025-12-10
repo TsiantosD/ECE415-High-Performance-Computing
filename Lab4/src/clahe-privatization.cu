@@ -4,17 +4,6 @@
 #include <math.h>
 #include "clahe.h"
 
-#define CUDA_CHECK_LAST_ERROR()                                              \
-    do {                                                                     \
-        cudaDeviceSynchronize();                                             \
-        cudaError_t _err = cudaGetLastError();                               \
-        if (_err != cudaSuccess) {                                           \
-            printf("CUDA Error: %s in %s, line %d\n",                        \
-                   cudaGetErrorString(_err), __FILE__, __LINE__);            \
-            cleanUp(DEVICE_ERROR);                                           \
-        }                                                                    \
-    } while (0)
-
 __global__ void bilinear_interpolation(unsigned char* img_data, int* all_luts) {
     int x = threadIdx.y * blockDim.x + threadIdx.x;
     int y = threadIdx.x * blockDim.y + threadIdx.y;
@@ -74,7 +63,7 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
     // Build Histogram
     // Boundary check mostly for the right/bottom edge tiles
     if (x < image_w && y < image_h) {
-        atomicAdd(priv_hist[img_data[y * image_w + x]], 1);
+        atomicAdd(&(priv_hist[img_data[y * image_w + x]]), 1);
     }
     __syncthreads();
 
@@ -85,7 +74,7 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
 
     if (i < 256) {
         if (priv_hist[i] > CLIP_LIMIT) {
-            atomicAdd(excess, priv_hist[i] - CLIP_LIMIT);
+            atomicAdd(&excess, priv_hist[i] - CLIP_LIMIT);
             priv_hist[i] = CLIP_LIMIT;
         }
     }
@@ -95,14 +84,14 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
     int avg_inc;
     avg_inc = excess / 256;
     if (i < 256) {
-        atomicAdd(priv_hist[i], avg_inc);
+        atomicAdd(&(priv_hist[i]), avg_inc);
     }
     __syncthreads();
 
     // Compute CDF & LUT
     int val;
     if (i < 256) {
-        atomicAdd(cdf, priv_hist[i]);
+        atomicAdd(&cdf, priv_hist[i]);
         // Calculate equalized value
         val = (int)((float)cdf * 255.0f / total_tile_pixels + 0.5f);
         if (val > 255)
@@ -114,24 +103,24 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
     all_luts[threadIdx.y * blockDim.x + threadIdx.x] = priv_lut;
 }
 
+unsigned char* d_img_data_in;
+unsigned char* d_img_data_out;
+int *all_luts; // Big array to store LUTs for all tiles
+
 // Core CLAHE
-__host__ PGM_IMG apply_clahe(PGM_IMG img_in) {
-    PGM_IMG img_out;
-    unsigned char* d_img_data_in;
-    unsigned char* d_img_data_out;
+__host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     int w = img_in.w;
     int h = img_in.h;
     int grid_w, grid_h;
-    int *all_luts; // Big array to store LUTs for all tiles
     int* current_lut_ptr;
     int ty, tx, x, y, x1, x2, y1, y2, tl, tr, bl, br, val;
     int x_start, y_start, actual_tile_w, actual_tile_h;
     float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
 
     // Allocate output image
-    img_out.w = w;
-    img_out.h = h;
-    img_out.img = (unsigned char *)malloc(w * h * sizeof(unsigned char));
+    img_out->w = w;
+    img_out->h = h;
+    img_out->img = (unsigned char *)malloc(w * h * sizeof(unsigned char));
 
     // Calculate grid dimensions
     grid_w = (w + TILE_SIZE - 1) / TILE_SIZE;
@@ -142,19 +131,24 @@ __host__ PGM_IMG apply_clahe(PGM_IMG img_in) {
     cudaMalloc((void **) &all_luts, grid_w * grid_h * 256 * sizeof(int));
     CUDA_CHECK_LAST_ERROR();
 
-    // Transfer image from host to device
     cudaMalloc((void **) &d_img_data_in, w * h * sizeof(unsigned char));
-    CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_img_data_in, img_in.img, w * h * sizeof(unsigned char), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
 
     // Allocate space for device output image
     cudaMalloc((void **) &d_img_data_out, w * h * sizeof(unsigned char));
     CUDA_CHECK_LAST_ERROR();
 
-    // Precompute all Tile LUTs ---
+    GpuTimer timer = GpuTimer();
+    timer.Start();
+
+    // Transfer image from host to device
+    cudaMemcpy(d_img_data_in, img_in.img, w * h * sizeof(unsigned char), cudaMemcpyHostToDevice);
+    CUDA_CHECK_LAST_ERROR();
+
     dim3 gridSize(grid_w, grid_h);
-    dim3 blockSize(TILE_SIZE > 32 : 32 : TILE_SIZE, TILE_SIZE > 32 : 32 : TILE_SIZE);
+    dim3 blockSize(w < 32 ? w : TILE_SIZE, h < 32 ? h : TILE_SIZE);
+
+    // Precompute all Tile LUTs ---
     compute_histogram<<<gridSize, blockSize>>>(d_img_data_in, w, h, all_luts);
     CUDA_CHECK_LAST_ERROR();
 
@@ -162,11 +156,19 @@ __host__ PGM_IMG apply_clahe(PGM_IMG img_in) {
     bilinear_interpolation<<<gridSize, blockSize>>>(d_img_data_out, all_luts);
     CUDA_CHECK_LAST_ERROR();
 
-    cudaMemcpy(img_out.img, d_img_data_out, w * h * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+    cudaMemcpy(img_out->img, d_img_data_out, w * h * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+    CUDA_CHECK_LAST_ERROR();
 
-    cudaFree(all_luts);
+    timer.Stop();
+
+    cleanUp();
+
+    return 0;
+}
+
+void cleanUp() {
     cudaFree(d_img_data_in);
     cudaFree(d_img_data_out);
-
-    return img_out;
+    cudaFree(all_luts);
+    cudaDeviceReset();
 }
