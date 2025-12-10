@@ -1,5 +1,17 @@
 #ifndef HELPERS_H
 #define HELPERS_H
+#include "clahe.h"
+
+#define CUDA_CHECK_LAST_ERROR()                                              \
+    do {                                                                     \
+        cudaDeviceSynchronize();                                             \
+        cudaError_t _err = cudaGetLastError();                               \
+        if (_err != cudaSuccess) {                                           \
+            printf("CUDA Error: %s in %s, line %d\n",                        \
+                   cudaGetErrorString(_err), __FILE__, __LINE__);            \
+            cleanUp();                                           \
+        }                                                                    \
+    } while (0)
 
 PGM_IMG read_pgm(const char * path);
 void write_pgm(PGM_IMG img, const char * path);

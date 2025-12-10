@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "clahe.h"
+#include "helpers.h"
 
 // Helper: Read PGM
 PGM_IMG read_pgm(const char * path){
@@ -15,14 +15,14 @@ PGM_IMG read_pgm(const char * path){
         exit(1);
     }
 
-    fscanf(in_file, "%s", sbuf); /*Skip P5*/
-    fscanf(in_file, "%d",&result.w);
-    fscanf(in_file, "%d",&result.h);
-    fscanf(in_file, "%d",&v_max);
+    if(fscanf(in_file, "%s", sbuf) != 1) exit(1); /*Skip P5*/
+    if(fscanf(in_file, "%d",&result.w) != 1) exit(1);
+    if(fscanf(in_file, "%d",&result.h) != 1) exit(1);
+    if(fscanf(in_file, "%d",&v_max) != 1) exit(1);
     fgetc(in_file); // Skip the single whitespace/newline after max_val
 
     result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    fread(result.img, sizeof(unsigned char), result.w*result.h, in_file);
+    if(fread(result.img, sizeof(unsigned char), result.w*result.h, in_file) != result.w*result.h) exit(1);
     fclose(in_file);
 
     return result;

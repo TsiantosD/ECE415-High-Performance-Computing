@@ -1,9 +1,6 @@
 #ifndef CLAHE_H
 #define CLAHE_H
 
-#include <stdio.h>
-#include <stdlib.h>
-
 // Configuration for CLAHE
 // 32x32 is a standard tile size for high-res images
 #define TILE_SIZE 32    
@@ -23,5 +20,7 @@ void free_pgm(PGM_IMG img);
 
 // Core Processing
 PGM_IMG apply_clahe(PGM_IMG img_in);
+double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out);
+void cleanUp();
 
 #endif

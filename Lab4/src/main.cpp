@@ -11,8 +11,8 @@ double get_time_sec() {
 }
 
 int main(int argc, char *argv[]){
-    PGM_IMG img_in, img_out;
-    double start, end, elapsed;
+    PGM_IMG img_in, h_img_out, d_img_out;
+    double start, end, h_elapsed, d_elapsed;
 
     if (argc != 3) {
         printf("Usage: %s <input.pgm> <output.pgm>\n", argv[0]);
@@ -25,19 +25,24 @@ int main(int argc, char *argv[]){
     printf("Running CPU CLAHE reference...\n");
     start = get_time_sec();
     
-    img_out = apply_clahe(img_in);
+    h_img_out = apply_clahe(img_in);
     
     end = get_time_sec();
-    elapsed = end - start;
+    h_elapsed = end - start;
     
-    printf("Processing time: %.6f seconds\n", elapsed);
-    printf("Throughput: %.2f MPixels/s\n", (img_in.w * img_in.h) / (elapsed * 1e6));
+    printf("Processing time: %.6f seconds\n", h_elapsed);
+    printf("Throughput: %.2f MPixels/s\n", (img_in.w * img_in.h) / (h_elapsed * 1e6));
 
-    write_pgm(img_out, argv[2]);
+    printf("Running GPU CLAHE reference...\n");
+    d_elapsed = d_apply_clahe(img_in, &d_img_out);
+    printf("Processing time: %.6f seconds\n", d_elapsed * 1e-3);
+    printf("Throughput: %.2f MPixels/s\n", (img_in.w * img_in.h) / (d_elapsed * 1e3));
+
+    write_pgm(d_img_out, argv[2]);
     printf("Result saved to %s\n", argv[2]);
 
     free_pgm(img_in);
-    free_pgm(img_out);
+    free_pgm(h_img_out);
 
     return 0;
 }

@@ -1,60 +1,26 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "clahe.h"
-
-// Helper: Read PGM
-PGM_IMG read_pgm(const char * path){
-    FILE * in_file;
-    char sbuf[256];
-    PGM_IMG result;
-    int v_max;
-
-    in_file = fopen(path, "rb");
-    if (in_file == NULL){
-        printf("Input file not found!\n");
-        exit(1);
-    }
-    
-    fscanf(in_file, "%s", sbuf); /*Skip P5*/
-    fscanf(in_file, "%d",&result.w);
-    fscanf(in_file, "%d",&result.h);
-    fscanf(in_file, "%d",&v_max);
-    fgetc(in_file); // Skip the single whitespace/newline after max_val
-
-    result.img = (unsigned char *)malloc(result.w * result.h * sizeof(unsigned char));
-    fread(result.img, sizeof(unsigned char), result.w*result.h, in_file);    
-    fclose(in_file);
-    
-    return result;
-}
-
-// Helper: Write PGM
-void write_pgm(PGM_IMG img, const char * path){
-    FILE * out_file;
-    
-    out_file = fopen(path, "wb");
-    fprintf(out_file, "P5\n");
-    fprintf(out_file, "%d %d\n255\n", img.w, img.h);
-    fwrite(img.img, sizeof(unsigned char), img.w*img.h, out_file);
-    fclose(out_file);
-}
-
-// Helper: Free PGM Memory
-void free_pgm(PGM_IMG img) {
-    if(img.img) free(img.img);
-}
 
 // Compute & Clip Histogram for a specific tile
 void compute_histogram(unsigned char* data, 
                        int w, int h, int start_x, int start_y, 
                        int tile_w, int tile_h, 
                        int* lut) {
+    int hist[256] = {0};
     int x, y, i, avg_inc, val;
     int excess = 0, cdf = 0, total_pixels = tile_w * tile_h; 
 
-
+    // Build Histogram
+    for (y = start_y; y < start_y + tile_h; ++y) {
+        for (x = start_x; x < start_x + tile_w; ++x) {
+            // Boundary check mostly for the right/bottom edge tiles
+            if(x < w && y < h) {
+                hist[data[y * w + x]]++;
+            }
+        }
+    }
 
     // Clip Histogram
     for (i = 0; i < 256; ++i) {
@@ -81,35 +47,6 @@ void compute_histogram(unsigned char* data,
     }
 }
 
-__global__ void create_tile_histogram(int* all_luts, int w) {
-    int* current_lut_ptr;
-    int tx = blockIdx.x;
-    int ty = blockIdx.y;
-    int hist[256] = {0};
-
-    x_start = tx * TILE_SIZE;
-    y_start = ty * TILE_SIZE;
-
-    // Handle boundary tiles that might be smaller than TILE_SIZE
-    // TODO: remove to avoid divergence
-    actual_tile_w = (x_start + TILE_SIZE > w)
-                    ? (w - x_start)
-                    : TILE_SIZE;
-    actual_tile_h = (y_start + TILE_SIZE > h)
-                    ? (h - y_start)
-                    : TILE_SIZE;
-
-    // Pointer to the specific 256-entry LUT for this tile
-    current_lut_ptr = &all_luts[(ty * gridDim.x + tx) * 256];
-
-    // Build Histogram
-    // Boundary check mostly for the right/bottom edge tiles
-    // TODO: remove to avoid divergence
-    if (x < w && y < h) {
-        hist[data[y * w + x]]++;
-    }
-}
-
 // Core CLAHE
 PGM_IMG apply_clahe(PGM_IMG img_in) {
     PGM_IMG img_out;
@@ -117,7 +54,8 @@ PGM_IMG apply_clahe(PGM_IMG img_in) {
     int h = img_in.h;
     int grid_w, grid_h;
     int *all_luts; // Big array to store LUTs for all tiles
-    int x, y, x1, x2, y1, y2, tl, tr, bl, br, val;
+    int* current_lut_ptr;
+    int ty, tx, x, y, x1, x2, y1, y2, tl, tr, bl, br, val;
     int x_start, y_start, actual_tile_w, actual_tile_h;
     float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
 
@@ -132,13 +70,26 @@ PGM_IMG apply_clahe(PGM_IMG img_in) {
     
     // Allocate memory for all LUTs: [grid_h][grid_w][256],
     // as an 1D array
-    // TODO: change to char if possible
-    cudaMalloc((void **) &all_luts, grid_w * grid_h * 256 * sizeof(int));
+    all_luts = (int *)malloc(grid_w * grid_h * 256 * sizeof(int));
 
     // Precompute all Tile LUTs ---
-    dim3 gridSize(grid_w, grid_h);
-    dim3 blockSize(TILE_SIZE, TILE_SIZE);
-    create_tile_histogram<<<gridSize, blockSize>>>(all_luts, w);
+    for (ty = 0; ty < grid_h; ++ty) {
+        for (tx = 0; tx < grid_w; ++tx) {
+            x_start = tx * TILE_SIZE;
+            y_start = ty * TILE_SIZE;
+            
+            // Handle boundary tiles that might be smaller than TILE_SIZE
+            actual_tile_w = (x_start + TILE_SIZE > w) ? (w - x_start) : TILE_SIZE;
+            actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
+            
+            // Pointer to the specific 256-entry LUT for this tile
+            current_lut_ptr = &all_luts[(ty * grid_w + tx) * 256];
+            
+            compute_histogram(img_in.img, w, h, x_start, y_start, 
+                              actual_tile_w, actual_tile_h, 
+                              current_lut_ptr);
+        }
+    }
 
     // Render pixels using Bilinear Interpolation
     for (y = 0; y < h; ++y) {

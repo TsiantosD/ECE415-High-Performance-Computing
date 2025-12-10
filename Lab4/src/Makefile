@@ -1,51 +1,65 @@
 # ==========================================
-# C Makefile for CLAHE Project
+# C/CUDA Makefile for CLAHE Project
 # ==========================================
 
 # 1. Compiler settings
-CC := gcc
+CC := nvcc
 
 # 2. Target executable name
 TARGET := main
 
 # 3. Source files
-# List all .c files here so they compile together
-SRCS := main.c clahe.c helpers.c
+# AUTOMATICALLY find all .c files in the current directory
+C_SRCS := $(wildcard *.cpp)
+
+# SPECIFY the single .cu file here
+# You can change this manually or override it: make CU_FILE=other_kernel.cu
+CU_FILE := clahe-3-kernels.cu
 
 # 4. Object files
-# Automatically converts main.c clahe.c -> main.o clahe.o
-OBJS := $(SRCS:.c=.o)
+# Convert all found .c files to .o
+C_OBJS := $(C_SRCS:.cpp=.o)
+# Convert the specified .cu file to .o
+CU_OBJ := $(CU_FILE:.cu=.o)
 
-# 5. Base Flags (Always used)
-# -Wall -Wextra: specific warning flags to catch errors
-CFLAGS := -Wall -Wextra
+# Combine them for the linker
+OBJS := $(C_OBJS) $(CU_OBJ)
+
+# 5. Base Flags
+# Note: nvcc passes warnings to host compiler via -Xcompiler
+CFLAGS := 
 
 # ------------------------------------------
 # Build Rules
 # ------------------------------------------
 
 # --- 1. Default Build (Release) ---
-# Usage: make
-# Adds -O2 for speed, no debug info
 all: CFLAGS += -O3
 all: $(TARGET)
 
 # --- 2. Debug Build ---
-# Usage: make debug
-# Adds -g (debug info) and -O0 (disables optimization for clearer debugging)
-debug: CFLAGS += -g -O0
+# -G generates device debug info, -g generates host debug info
+debug: CFLAGS += -g -G -O0
 debug: $(TARGET)
 
 # --- Link Step ---
-# Creates the executable from the object files
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS) -lm
 
-# --- Compile Step ---
-# Compiles each .c file into a .o file
-%.o: %.c
+# --- Compile Step for C files ---
+%.o: %.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# --- Compile Step for CUDA files ---
+%.o: %.cu
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # --- Clean ---
 clean:
 	rm -f $(TARGET) $(OBJS)
+
+# Debug helper to see what files are being picked up
+info:
+	@echo "C Sources: $(C_SRCS)"
+	@echo "CUDA Source: $(CU_FILE)"
+	@echo "Objects: $(OBJS)"
