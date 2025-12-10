@@ -111,7 +111,10 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
     }
     __syncthreads();
 
-    all_luts[threadIdx.y * blockDim.x + threadIdx.x] = priv_lut;
+    if (i < 256) {
+        all_luts[threadIdx.y * blockDim.x + threadIdx.x + i] = priv_lut[i];
+    }
+    __syncthreads();
 }
 
 unsigned char* d_img_data_in;
@@ -134,6 +137,9 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     grid_w = (w + TILE_SIZE - 1) / TILE_SIZE;
     grid_h = (h + TILE_SIZE - 1) / TILE_SIZE;
 
+    GpuTimer timer = GpuTimer();
+    timer.Start();
+
     // Allocate memory for all LUTs: [grid_h][grid_w][256], as an 1D array
     // TODO: change to char if possible
     cudaMalloc((void **) &all_luts, grid_w * grid_h * 256 * sizeof(int));
@@ -145,9 +151,6 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     // Allocate space for device output image
     cudaMalloc((void **) &d_img_data_out, w * h * sizeof(unsigned char));
     CUDA_CHECK_LAST_ERROR();
-
-    GpuTimer timer = GpuTimer();
-    timer.Start();
 
     // Transfer image from host to device
     cudaMemcpy(d_img_data_in, img_in.img, w * h * sizeof(unsigned char), cudaMemcpyHostToDevice);
