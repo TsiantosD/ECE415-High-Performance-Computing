@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include "clahe.h"
+#include "gputimer.h"
 
 // Compute & Clip Histogram for a specific tile
 __global__ void compute_histogram(unsigned char* data, int w, int h, int *all_hist) {
@@ -58,6 +59,7 @@ __global__ void render_clahe(unsigned char *img_in, unsigned char *img_out, int 
     int x1, x2, y1, y2, tl, tr, bl, br, val;
     int x = blockDim.x * blockIdx.x + threadIdx.x;
     int y = blockDim.y * blockIdx.y + threadIdx.y;
+    if (x >= w || y >= h) return;
 
     // Find relative position in the grid
     // (y / TILE_SIZE) gives the tile index, but we want the center approach
@@ -119,9 +121,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     img_out->w = w;
     img_out->h = h;
     img_out->img = (unsigned char *)malloc(w * h * sizeof(unsigned char));
-    
-    // Allocate memory for all LUTs: [grid_h][grid_w][256],
-    // as an 1D array
+
     cudaMalloc(&d_img_in, w * h * sizeof(unsigned char));
     CUDA_CHECK_LAST_ERROR();
     cudaMalloc(&d_img_out, w * h * sizeof(unsigned char));
@@ -132,6 +132,8 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     CUDA_CHECK_LAST_ERROR();
     cudaMemcpy(d_img_in, img_in.img, w * h * sizeof(unsigned char), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
+
+    cudaMemset(all_hist, 0, grid_w * grid_h * 256 * sizeof(int));
 
     dim3 dimGrid((w + TILE_SIZE - 1)  / TILE_SIZE, (h + TILE_SIZE - 1) / TILE_SIZE);
     dim3 dimBlock(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);

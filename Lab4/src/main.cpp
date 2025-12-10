@@ -40,7 +40,7 @@ int main(int argc, char *argv[]){
 
 #if CHECK_OUTPUT==1
     if (check_pgm(h_img_out, d_img_out))
-        printf("Output is correct!\n");
+        printf("They are the same picture!\n");
     else
         printf("Output is wrong!\n");
 #endif

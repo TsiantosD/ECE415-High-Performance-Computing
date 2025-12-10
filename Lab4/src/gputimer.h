@@ -13,11 +13,6 @@ struct GpuTimer
         cudaEventCreate(&stop);
     }
 
-    ~GpuTimer() {
-        cudaEventDestroy(start);
-        cudaEventDestroy(stop);
-    }
-
     void Start() {
         cudaEventRecord(start, 0);
     }
