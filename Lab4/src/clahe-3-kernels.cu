@@ -108,12 +108,14 @@ unsigned char *d_img_in;
 unsigned char *d_img_out;
 int *all_hist;
 int *all_luts;
+cudaEvent_t start, stop;
 
 // Core CLAHE
 double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     int w = img_in.w;
     int h = img_in.h;
     int grid_w, grid_h;
+    float elapsed;
 
     // Calculate grid dimensions
     grid_w = (w + TILE_SIZE - 1) / TILE_SIZE;
@@ -122,6 +124,12 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     img_out->h = h;
     img_out->img = (unsigned char *)malloc(w * h * sizeof(unsigned char));
 
+    cudaEventCreate(&start);
+    CUDA_CHECK_LAST_ERROR();
+    cudaEventCreate(&stop);
+    CUDA_CHECK_LAST_ERROR();
+
+    cudaEventRecord(start);
     cudaMalloc(&d_img_in, w * h * sizeof(unsigned char));
     CUDA_CHECK_LAST_ERROR();
     cudaMalloc(&d_img_out, w * h * sizeof(unsigned char));
@@ -132,8 +140,8 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     CUDA_CHECK_LAST_ERROR();
     cudaMemcpy(d_img_in, img_in.img, w * h * sizeof(unsigned char), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-
     cudaMemset(all_hist, 0, grid_w * grid_h * 256 * sizeof(int));
+    CUDA_CHECK_LAST_ERROR();
 
     dim3 dimGrid((w + TILE_SIZE - 1)  / TILE_SIZE, (h + TILE_SIZE - 1) / TILE_SIZE);
     dim3 dimBlock(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
@@ -152,9 +160,14 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
 
     cudaMemcpy(img_out->img, d_img_out, w * h * sizeof(unsigned char), cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
+    cudaEventRecord(stop);
+
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&elapsed, start, stop);
 
     cleanUp();
-    return 0;
+    
+    return elapsed;
 }
 
 void cleanUp() {
@@ -162,5 +175,7 @@ void cleanUp() {
     cudaFree(d_img_out);
     cudaFree(all_hist);
     cudaFree(all_luts);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
     cudaDeviceReset();
 }
