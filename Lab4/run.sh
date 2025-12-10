@@ -7,33 +7,34 @@ ITERATIONS=1
 CHECK_OUTPUT_VAL=1
 CU_FILE_SELECTED=""
 IMAGE_ARG=""
+DEBUG_MODE=0  # 0 = Release (Default), 1 = Debug
 
 # ==========================================
 # Help / Usage Function
 # ==========================================
 usage() {
-    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i image_name]"
+    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i image_name] [-d]"
     echo ""
     echo "Flags:"
-    echo "  -n: Number of times to run the program (Default: 1)"
+    echo "  -n: Number of times to run (Default: 1)"
     echo "  -c: Value for CHECK_OUTPUT (Default: 1)"
-    echo "  -f: Specific .cu file to use (skips selection menu)"
-    echo "  -i: Input image filename (e.g., 'test.pgm')."
-    echo "      Checks 'Images/' folder. Prompts selection if omitted."
-    echo ""
-    echo "Example: $0 -n 10 -i test.pgm"
+    echo "  -f: Specific .cu file (e.g., 'clahe.cu')"
+    echo "  -i: Image filename (e.g., 'test.pgm'). Checks 'Images/'."
+    echo "  -d: Compile in DEBUG mode (Target: debug). Default is Release."
     exit 1
 }
 
 # ==========================================
-# 1. Parse Command Line Flags
+# 1. Parse Flags
 # ==========================================
-while getopts "n:c:f:i:" opt; do
+# Added 'd' to the option string (no colon after d because it takes no argument)
+while getopts "n:c:f:i:d" opt; do
     case $opt in
         n) ITERATIONS=$OPTARG ;;
         c) CHECK_OUTPUT_VAL=$OPTARG ;;
         f) CU_FILE_SELECTED=$OPTARG ;;
         i) IMAGE_ARG=$OPTARG ;;
+        d) DEBUG_MODE=1 ;;
         *) usage ;;
     esac
 done
@@ -163,8 +164,19 @@ echo "Using Kernel: $CU_FILE_SELECTED"
 # 5. Compile
 # ==========================================
 echo "Compiling..."
-make -C src clean > /dev/null
-make -C src CU_FILE="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL"
+
+# Clean first
+make -C src clean CU_FILE="$CU_FILE_SELECTED" > /dev/null
+
+# Construct Flags
+
+if [ "$DEBUG_MODE" -eq 1 ]; then
+    echo ">> Building DEBUG Target (slow, symbols enabled)"
+    make -C src debug CU_FILE="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL"
+else
+    echo ">> Building RELEASE Target (optimized)"
+    make -C src CU_FILE="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL"
+fi
 
 if [ $? -ne 0 ]; then
     echo "Compilation Failed!"

@@ -6,7 +6,7 @@
 #include "gputimer.h"
 
 __global__ void bilinear_interpolation(unsigned char* img_data, int* all_luts, int w, int grid_w, int grid_h) {
-    int ty, tx, x1, x2, y1, y2, tl, tr, bl, br, val;
+    int x1, x2, y1, y2, tl, tr, bl, br, val;
     float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
 
     int x = threadIdx.y * blockDim.x + threadIdx.x;
@@ -81,8 +81,10 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
 
     // Clip Histogram
     // use up to 256 threads
-    int excess = 0, cdf = 0;
+    __shared__ int excess;
+    int cdf = 0;
 
+    if (i == 0) excess = 0;
     if (i < 256) {
         if (priv_hist[i] > CLIP_LIMIT) {
             atomicAdd(&excess, priv_hist[i] - CLIP_LIMIT);
@@ -102,7 +104,8 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
     // Compute CDF & LUT
     int val;
     if (i < 256) {
-        atomicAdd(&cdf, priv_hist[i]);
+        for (int j = 0; j <= i; j++)
+            cdf += priv_hist[j] + avg_inc;
         // Calculate equalized value
         val = (int)((float)cdf * 255.0f / total_tile_pixels + 0.5f);
         if (val > 255)
@@ -112,7 +115,7 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
     __syncthreads();
 
     if (i < 256) {
-        all_luts[threadIdx.y * blockDim.x + threadIdx.x + i] = priv_lut[i];
+        all_luts[(blockIdx.y * gridDim.x + blockIdx.x) * 256 + i] = priv_lut[i];
     }
     __syncthreads();
 }
@@ -126,7 +129,6 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     int w = img_in.w;
     int h = img_in.h;
     int grid_w, grid_h;
-    int* current_lut_ptr;
 
     // Allocate output image
     img_out->w = w;
@@ -157,7 +159,7 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     CUDA_CHECK_LAST_ERROR();
 
     dim3 gridSize(grid_w, grid_h);
-    dim3 blockSize(w < 32 ? w : TILE_SIZE, h < 32 ? h : TILE_SIZE);
+    dim3 blockSize(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
 
     // Precompute all Tile LUTs ---
     compute_histogram<<<gridSize, blockSize>>>(d_img_data_in, w, h, all_luts);
@@ -171,10 +173,11 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     CUDA_CHECK_LAST_ERROR();
 
     timer.Stop();
+    float elapsed = timer.Elapsed();
 
     cleanUp();
 
-    return timer.Elapsed();
+    return elapsed;
 }
 
 void cleanUp() {
