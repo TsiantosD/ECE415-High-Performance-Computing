@@ -25,9 +25,13 @@ CU_OBJ := $(CU_FILE:.cu=.o)
 # Combine them for the linker
 OBJS := $(C_OBJS) $(CU_OBJ)
 
-# 5. Base Flags
-# Note: nvcc passes warnings to host compiler via -Xcompiler
-CFLAGS := 
+ifeq ($(USER_FLAGS),)
+    USER_FLAGS := -DCHECK_OUTPUT=1
+endif
+
+# Base Flags
+# USER_FLAGS is where the script will inject -DCHECK_OUTPUT
+CFLAGS := $(USER_FLAGS)
 
 # ------------------------------------------
 # Build Rules
@@ -57,9 +61,3 @@ $(TARGET): $(OBJS)
 # --- Clean ---
 clean:
 	rm -f $(TARGET) $(OBJS)
-
-# Debug helper to see what files are being picked up
-info:
-	@echo "C Sources: $(C_SRCS)"
-	@echo "CUDA Source: $(CU_FILE)"
-	@echo "Objects: $(OBJS)"

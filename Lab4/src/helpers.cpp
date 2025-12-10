@@ -39,6 +39,18 @@ void write_pgm(PGM_IMG img, const char * path){
     fclose(out_file);
 }
 
+bool check_pgm(PGM_IMG img1, PGM_IMG img2) {
+    if (img1.w != img2.w || img1.h != img2.h) return false;
+
+    int total_pixels = img1.h * img1.w;
+    for (int i = 0; i < total_pixels; i++) {
+        if (img1.img[i] != img2.img[i])
+            return false;
+    }
+
+    return true;
+}
+
 // Helper: Free PGM Memory
 void free_pgm(PGM_IMG img) {
     if(img.img) free(img.img);

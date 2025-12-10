@@ -1,6 +1,5 @@
 #ifndef HELPERS_H
 #define HELPERS_H
-#include "clahe.h"
 
 #define CUDA_CHECK_LAST_ERROR()                                              \
     do {                                                                     \
@@ -13,8 +12,15 @@
         }                                                                    \
     } while (0)
 
+typedef struct{
+    int w;
+    int h;
+    unsigned char * img;
+} PGM_IMG;
+
 PGM_IMG read_pgm(const char * path);
 void write_pgm(PGM_IMG img, const char * path);
+bool check_pgm(PGM_IMG img1, PGM_IMG img2);
 void free_pgm(PGM_IMG img);
 
 #endif

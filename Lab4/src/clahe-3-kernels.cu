@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "helpers.h"
+#include "clahe.h"
 
 // Compute & Clip Histogram for a specific tile
 __global__ void compute_histogram(unsigned char* data, int w, int h, int tile_w, int tile_h, int *hist) {

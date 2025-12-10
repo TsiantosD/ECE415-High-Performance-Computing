@@ -38,6 +38,13 @@ int main(int argc, char *argv[]){
     printf("Processing time: %.6f seconds\n", d_elapsed * 1e-3);
     printf("Throughput: %.2f MPixels/s\n", (img_in.w * img_in.h) / (d_elapsed * 1e3));
 
+#if CHECK_OUTPUT==1
+    if (check_pgm(h_img_out, d_img_out))
+        printf("Output is correct!\n");
+    else
+        printf("Output is wrong!\n");
+#endif
+
     write_pgm(d_img_out, argv[2]);
     printf("Result saved to %s\n", argv[2]);
 
