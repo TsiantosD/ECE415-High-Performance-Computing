@@ -3,8 +3,12 @@
 #include <string.h>
 #include <math.h>
 #include "clahe.h"
+#include "gputimer.h"
 
-__global__ void bilinear_interpolation(unsigned char* img_data, int* all_luts) {
+__global__ void bilinear_interpolation(unsigned char* img_data, int* all_luts, int w) {
+    int ty, tx, x1, x2, y1, y2, tl, tr, bl, br, val;
+    float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
+
     int x = threadIdx.y * blockDim.x + threadIdx.x;
     int y = threadIdx.x * blockDim.y + threadIdx.y;
 
@@ -113,9 +117,6 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     int h = img_in.h;
     int grid_w, grid_h;
     int* current_lut_ptr;
-    int ty, tx, x, y, x1, x2, y1, y2, tl, tr, bl, br, val;
-    int x_start, y_start, actual_tile_w, actual_tile_h;
-    float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
 
     // Allocate output image
     img_out->w = w;
@@ -153,7 +154,7 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     CUDA_CHECK_LAST_ERROR();
 
     // Render pixels using Bilinear Interpolation
-    bilinear_interpolation<<<gridSize, blockSize>>>(d_img_data_out, all_luts);
+    bilinear_interpolation<<<gridSize, blockSize>>>(d_img_data_out, all_luts, w);
     CUDA_CHECK_LAST_ERROR();
 
     cudaMemcpy(img_out->img, d_img_data_out, w * h * sizeof(unsigned char), cudaMemcpyDeviceToHost);
@@ -163,7 +164,7 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
 
     cleanUp();
 
-    return 0;
+    return timer.Elapsed();
 }
 
 void cleanUp() {
