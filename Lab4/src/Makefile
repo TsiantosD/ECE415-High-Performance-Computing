@@ -10,7 +10,7 @@ TARGET := main
 
 # 3. Source files
 # List all .c files here so they compile together
-SRCS := main.c clahe.c
+SRCS := main.c clahe.c helpers.c
 
 # 4. Object files
 # Automatically converts main.c clahe.c -> main.o clahe.o
