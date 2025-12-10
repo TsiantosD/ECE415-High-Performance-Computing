@@ -5,7 +5,7 @@
 #include "clahe.h"
 #include "gputimer.h"
 
-__global__ void bilinear_interpolation(unsigned char* img_data, int* all_luts, int w) {
+__global__ void bilinear_interpolation(unsigned char* img_data, int* all_luts, int w, int grid_w, int grid_h) {
     int ty, tx, x1, x2, y1, y2, tl, tr, bl, br, val;
     float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
 
@@ -56,13 +56,21 @@ __global__ void bilinear_interpolation(unsigned char* img_data, int* all_luts, i
 }
 
 __global__ void compute_histogram(unsigned char* img_data, int image_w, int image_h, int* all_luts) {
-    __shared__ int priv_hist[256] = {0};
-    __shared__ int priv_lut[256] = {0};
+    __shared__ int priv_hist[256];
+    __shared__ int priv_lut[256];
 
     int total_tile_pixels = blockDim.x * blockDim.y;
 
+    int i = threadIdx.y * blockDim.x + threadIdx.x;
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    // Initialize histogram and lut
+    if (i < 256) {
+        priv_hist[i] = 0;
+        priv_lut[i] = 0;
+    }
+    __syncthreads();
 
     // Build Histogram
     // Boundary check mostly for the right/bottom edge tiles
@@ -74,7 +82,6 @@ __global__ void compute_histogram(unsigned char* img_data, int image_w, int imag
     // Clip Histogram
     // use up to 256 threads
     int excess = 0, cdf = 0;
-    int i = threadIdx.y * blockDim.x + threadIdx.x;
 
     if (i < 256) {
         if (priv_hist[i] > CLIP_LIMIT) {
@@ -154,7 +161,7 @@ __host__ double d_apply_clahe(PGM_IMG img_in, PGM_IMG* img_out) {
     CUDA_CHECK_LAST_ERROR();
 
     // Render pixels using Bilinear Interpolation
-    bilinear_interpolation<<<gridSize, blockSize>>>(d_img_data_out, all_luts, w);
+    bilinear_interpolation<<<gridSize, blockSize>>>(d_img_data_out, all_luts, w, grid_w, grid_h);
     CUDA_CHECK_LAST_ERROR();
 
     cudaMemcpy(img_out->img, d_img_data_out, w * h * sizeof(unsigned char), cudaMemcpyDeviceToHost);
