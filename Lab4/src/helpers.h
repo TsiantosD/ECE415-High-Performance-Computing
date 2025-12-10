@@ -9,6 +9,7 @@
             printf("CUDA Error: %s in %s, line %d\n",                        \
                    cudaGetErrorString(_err), __FILE__, __LINE__);            \
             cleanUp();                                           \
+            exit(1);                                             \
         }                                                                    \
     } while (0)
 

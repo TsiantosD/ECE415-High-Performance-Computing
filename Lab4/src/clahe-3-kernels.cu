@@ -5,8 +5,10 @@
 #include "clahe.h"
 
 // Compute & Clip Histogram for a specific tile
-__global__ void compute_histogram(unsigned char* data, int w, int h, int tile_w, int tile_h, int *hist) {
-    int x = 0, y = 0; 
+__global__ void compute_histogram(unsigned char* data, int w, int h, int *all_hist) {
+    int x = blockDim.x * blockIdx.x + threadIdx.x;
+    int y = blockDim.y * blockIdx.y + threadIdx.y;
+    int *hist = &(all_hist[(blockIdx.y * gridDim.x + blockIdx.x) * 256]);
 
     // Build Histogram
     if(x < w && y < h) {
@@ -14,15 +16,26 @@ __global__ void compute_histogram(unsigned char* data, int w, int h, int tile_w,
     }
 }
 
-__global__ void clipAndComputeLuts(int *hist, int* lut, int tile_w, int tile_h) {
-    int val, avg_inc, cdf = 0, total_pixels = tile_w * tile_h; 
-    int i = threadIdx.x;
+__global__ void clip_and_compute_luts(int *all_hist, int* all_luts, int w, int h) {
+    int val, avg_inc, total_pixels, cdf = 0; 
+    int x = threadIdx.x;
+    int x_start = blockIdx.x * TILE_SIZE;
+    int y_start = blockIdx.y * TILE_SIZE;
+    int actual_tile_w = (x_start + TILE_SIZE > w) ? (w - x_start) : TILE_SIZE;
+    int actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
+    total_pixels = actual_tile_w * actual_tile_h;
+
+    int *hist = &(all_hist[(blockIdx.y * gridDim.x + blockIdx.x) * 256]);
+    int *lut = &(all_luts[(blockIdx.y * gridDim.x + blockIdx.x) * 256]);
     __shared__ int excess;
 
+    if (x == 0) excess = 0;
+    __syncthreads();
+
     // Clip Histogram
-    if (hist[i] > CLIP_LIMIT) {
-        atomicAdd(&excess,  (hist[i] - CLIP_LIMIT));
-        hist[i] = CLIP_LIMIT;
+    if (hist[x] > CLIP_LIMIT) {
+        atomicAdd(&excess,  (hist[x] - CLIP_LIMIT));
+        hist[x] = CLIP_LIMIT;
     }
     __syncthreads();
 
@@ -30,15 +43,17 @@ __global__ void clipAndComputeLuts(int *hist, int* lut, int tile_w, int tile_h) 
     avg_inc = excess / 256;
     
     // Compute CDF & LUT
-    cdf += hist[i] + avg_inc; //TODO wth this doesn't work at all 
+    for (int i = 0; i <= x; i++)
+        cdf += hist[i] + avg_inc;
+    
     // Calculate equalized value
     val = (int)((float)cdf * 255.0f / total_pixels + 0.5f);
     if (val > 255) 
         val = 255;
-    lut[i] = val;
+    lut[x] = val;
 }
 
-__global__ void renderClahe(PGM_IMG *img_in, PGM_IMG *img_out, int w, int h, int *all_luts) {
+__global__ void render_clahe(unsigned char *img_in, unsigned char *img_out, int w, int h, int *all_luts) {
     float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
     int x1, x2, y1, y2, tl, tr, bl, br, val;
     int x = blockDim.x * blockIdx.x + threadIdx.x;
@@ -71,7 +86,7 @@ __global__ void renderClahe(PGM_IMG *img_in, PGM_IMG *img_out, int w, int h, int
         y2 = gridDim.y - 1;
 
     // Original pixel intensity
-    val = img_in->img[y * w + x];
+    val = img_in[y * w + x];
     
     // Fetch mapped values from the 4 nearest tile LUTs
     tl = all_luts[(y1 * gridDim.x + x1) * 256 + val];
@@ -84,11 +99,11 @@ __global__ void renderClahe(PGM_IMG *img_in, PGM_IMG *img_out, int w, int h, int
     bot = bl * (1.0f - x_weight) + br * x_weight;
     final_val = top * (1.0f - y_weight) + bot * y_weight;
 
-    img_out->img[y * w + x] = (unsigned char)(final_val + 0.5f);
+    img_out[y * w + x] = (unsigned char)(final_val + 0.5f);
 }
 
-char *d_img_in;
-char *d_img_out;
+unsigned char *d_img_in;
+unsigned char *d_img_out;
 int *all_hist;
 int *all_luts;
 
@@ -115,25 +130,26 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     CUDA_CHECK_LAST_ERROR();
     cudaMalloc(&all_luts, grid_w * grid_h * 256 * sizeof(int));
     CUDA_CHECK_LAST_ERROR();
+    cudaMemcpy(d_img_in, img_in.img, w * h * sizeof(unsigned char), cudaMemcpyHostToDevice);
+    CUDA_CHECK_LAST_ERROR();
 
-    // Precompute all Tile LUTs ---
-    // for (ty = 0; ty < grid_h; ++ty) {
-    //     for (tx = 0; tx < grid_w; ++tx) {
-    //         x_start = tx * TILE_SIZE;
-    //         y_start = ty * TILE_SIZE;
-            
-    //         // Handle boundary tiles that might be smaller than TILE_SIZE
-    //         actual_tile_w = (x_start + TILE_SIZE > w) ? (w - x_start) : TILE_SIZE;
-    //         actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
-            
-    //         // Pointer to the specific 256-entry LUT for this tile
-    //         current_lut_ptr = &all_luts[(ty * grid_w + tx) * 256];
-            
-    //         compute_histogram(img_in.img, w, h, x_start, y_start, 
-    //                           actual_tile_w, actual_tile_h, 
-    //                           current_lut_ptr);
-    //     }
-    // }
+    dim3 dimGrid((w + TILE_SIZE - 1)  / TILE_SIZE, (h + TILE_SIZE - 1) / TILE_SIZE);
+    dim3 dimBlock(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
+    compute_histogram<<<dimGrid, dimBlock>>>(d_img_in, w, h, all_hist);
+    CUDA_CHECK_LAST_ERROR();
+
+    dimGrid = dim3((w + TILE_SIZE - 1)  / TILE_SIZE, (h + TILE_SIZE - 1) / TILE_SIZE);
+    dimBlock = dim3(256, 1);
+    clip_and_compute_luts<<<dimGrid, dimBlock>>>(all_hist, all_luts, w, h);
+    CUDA_CHECK_LAST_ERROR();
+
+    dimGrid = dim3((w + TILE_SIZE - 1)  / TILE_SIZE, (h  + TILE_SIZE - 1) / TILE_SIZE);
+    dimBlock = dim3(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
+    render_clahe<<<dimGrid, dimBlock>>>(d_img_in, d_img_out, w, h, all_luts);
+    CUDA_CHECK_LAST_ERROR();
+
+    cudaMemcpy(img_out->img, d_img_out, w * h * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+    CUDA_CHECK_LAST_ERROR();
 
     cleanUp();
     return 0;
