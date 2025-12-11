@@ -18,7 +18,7 @@ usage() {
     echo "Flags:"
     echo "  -n: Number of times to run (Default: 1)"
     echo "  -c: Value for CHECK_OUTPUT (Default: 1)"
-    echo "  -f: Specific .cu file (e.g., 'clahe.cu')"
+    echo "  -f: Specific .cu file (e.g., 'clahe.cu') OR a number ('1' for 1st file)"
     echo "  -i: Image filename (e.g., 'test.pgm'). Checks 'Images/'."
     echo "  -d: Compile in DEBUG mode (Target: debug). Default is Release."
     exit 1
@@ -120,45 +120,64 @@ echo "----------------------------------------"
 # ==========================================
 # 4. Select CUDA File (If not specified)
 # ==========================================
-if [ -z "$CU_FILE_SELECTED" ]; then
-    echo "Searching for .cu files in 'src/'..."
-    
-    # Find files in src/
-    CU_FILES=($(find src -maxdepth 1 -name "*.cu" | sort))
+if [ ! -d "src" ]; then
+    echo "Error: 'src' directory not found."
+    exit 1
+fi
 
-    if [ ${#CU_FILES[@]} -eq 0 ]; then
-        echo "Error: No .cu files found in src/."
-        exit 1
+# Safer way to read files into an array (handles spaces/newlines correctly)
+CU_FILES=()
+while IFS= read -r line; do
+    CU_FILES+=("$line")
+done < <(find src -maxdepth 1 -name "*.cu" | sort)
+
+NUM_FILES=${#CU_FILES[@]}
+
+# Sanity check to prevent the "integer expression" error
+if [ -z "$NUM_FILES" ] || [ "$NUM_FILES" -eq 0 ]; then
+    echo "Error: No .cu files found in src/."
+    exit 1
+fi
+
+if [ -n "$CU_FILE_SELECTED" ]; then
+    # Check if user provided a NUMBER (Integer)
+    if [[ "$CU_FILE_SELECTED" =~ ^[0-9]+$ ]]; then
+        INDEX=$CU_FILE_SELECTED
+        
+        # Validate Range
+        if [ "$INDEX" -ge 1 ] && [ "$INDEX" -le "$NUM_FILES" ]; then
+            FULL_CU_PATH=${CU_FILES[$((INDEX-1))]}
+            CU_FILE_SELECTED=$(basename "$FULL_CU_PATH")
+            echo "Selected via Index [$INDEX]: $CU_FILE_SELECTED"
+        else
+            echo "Error: Index $INDEX is out of range (1-$NUM_FILES)."
+            exit 1
+        fi
+    else
+        # User provided a filename string
+        CU_FILE_SELECTED=$(basename "$CU_FILE_SELECTED")
     fi
-
+else
+    # Interactive Mode
+    echo "Searching for .cu files in 'src/'..."
     echo "Available Kernels:"
     i=1
     for file in "${CU_FILES[@]}"; do
-        # Show full path "src/filename.cu" to user
-        echo "  [$i] $file"
+        echo "  [$i] $(basename "$file")"
         ((i++))
     done
     echo "----------------------------------------"
-
     read -p "Select kernel # (Default 1): " selection
     [ -z "$selection" ] && selection=1
 
-    if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le "${#CU_FILES[@]}" ]; then
-        # This gets "src/filename.cu"
+    if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le "$NUM_FILES" ]; then
         FULL_CU_PATH=${CU_FILES[$((selection-1))]}
-        # We need just "filename.cu" for the Makefile inside src
         CU_FILE_SELECTED=$(basename "$FULL_CU_PATH")
     else
         echo "Invalid selection."
         exit 1
     fi
-else
-    # If user provided a path manually (e.g. "src/test.cu" or "test.cu")
-    # ensure we pass just the filename to the Makefile
-    CU_FILE_SELECTED=$(basename "$CU_FILE_SELECTED")
 fi
-
-echo "Using Kernel: $CU_FILE_SELECTED"
 
 # ==========================================
 # 5. Compile
