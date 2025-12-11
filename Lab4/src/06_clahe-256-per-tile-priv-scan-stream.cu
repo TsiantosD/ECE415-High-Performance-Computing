@@ -227,22 +227,23 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&elapsed, start, stop);
 
-    // Internal Cleanup
-    cudaFree(d_img_in);
-    cudaFree(d_img_out);
-    cudaFree(all_luts);
-
     // --- MAGIC FIX: UNREGISTER ---
     // Unlock the pages so main() can free them safely later.
     cudaHostUnregister(img_in.img);
     cudaHostUnregister(img_out->img);
+
+    cleanUp();
     
     return elapsed;
 }
 
 // Called by main() at program exit
 void cleanUp() {
+    cudaFree(d_img_in);
+    cudaFree(d_img_out);
+    cudaFree(all_luts);
     for(int i=0; i<NUM_STREAMS; i++) cudaStreamDestroy(streams[i]);
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
+    cudaDeviceReset();
 }
