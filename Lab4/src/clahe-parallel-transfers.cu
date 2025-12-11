@@ -172,7 +172,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     // Allocate output image
     img_out->w = w;
     img_out->h = h;
-    img_out->img = (unsigned char *)cudaHostMalloc(w * h * sizeof(unsigned char));
+    img_out->img = (unsigned char *)cudaHostAlloc(w * h * sizeof(unsigned char));
 
     cudaEventCreate(&start);
     CUDA_CHECK_LAST_ERROR();
@@ -193,7 +193,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     // Create new streams
     cudaStream_t streams[num_streams];
 
-    for (int i; i < num_streams; i++) {
+    for (int i = 0; i < num_streams; i++) {
         cudaStreamCreate(&streams[i]);
 
         chunk_offset = i * w * chunk_h * TILE_SIZE;
@@ -206,7 +206,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
                         streams[i]);
         CUDA_CHECK_LAST_ERROR();
 
-        dim3 dimGrid(grid_w, grid_h);
+        dim3 dimGrid(grid_w, chunk_h);
         dim3 dimBlock(16, 16);
 
         compute_histogram<<<dimGrid, dimBlock, 0, streams[i]>>>(d_img_in + chunk_offset, w, h, d_all_luts);
@@ -219,8 +219,8 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     cudaMalloc(&d_img_out, w * h * sizeof(unsigned char));
     CUDA_CHECK_LAST_ERROR();
 
-    dimGrid = dim3(grid_w, grid_h);
-    dimBlock = dim3(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
+    dim3 dimGrid(grid_w, grid_h);
+    dim3 dimBlock(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
 
     render_clahe<<<dimGrid, dimBlock>>>(d_img_in, d_img_out, w, h, d_all_luts);
     CUDA_CHECK_LAST_ERROR();
@@ -239,7 +239,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
 void cleanUp() {
     cudaFree(d_img_in);
     cudaFree(d_img_out);
-    cudaFree(all_luts);
+    cudaFree(d_all_luts);
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
     cudaDeviceReset();
