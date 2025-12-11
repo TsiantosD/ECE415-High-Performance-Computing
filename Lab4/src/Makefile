@@ -43,7 +43,7 @@ all: $(TARGET)
 
 # --- 2. Debug Build ---
 # -G generates device debug info, -g generates host debug info
-debug: CFLAGS += -g -G -O0
+debug: CFLAGS += --ptxas-options="-v" -g -G -O0
 debug: $(TARGET)
 
 # --- Link Step ---

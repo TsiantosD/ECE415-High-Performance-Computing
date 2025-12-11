@@ -22,6 +22,7 @@ int main(int argc, char *argv[]){
     printf("Loading image...\n");
     img_in = read_pgm(argv[1]);
     
+#if CHECK_OUTPUT==1
     printf("Running CPU CLAHE reference...\n");
     start = get_time_sec();
     
@@ -32,6 +33,7 @@ int main(int argc, char *argv[]){
     
     printf("Processing time: %.6f seconds\n", h_elapsed);
     printf("Throughput: %.2f MPixels/s\n", (img_in.w * img_in.h) / (h_elapsed * 1e6));
+#endif
 
     printf("Running GPU CLAHE reference...\n");
     d_elapsed = d_apply_clahe(img_in, &d_img_out);
