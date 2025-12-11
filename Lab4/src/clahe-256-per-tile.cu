@@ -6,7 +6,7 @@
 #include "gputimer.h"
 
 // Compute & Clip Histogram for a specific tile
-__global__ void compute_histogram(unsigned char* data, int w, int h, int *all_luts) {
+__global__ void compute_histogram(unsigned char* data, int w, int h, unsigned char *all_luts) {
     int i = threadIdx.y * blockDim.x + threadIdx.x;
     int val, avg_inc, total_pixels, cdf = 0;
     int x_start = blockIdx.x * TILE_SIZE;
@@ -14,7 +14,7 @@ __global__ void compute_histogram(unsigned char* data, int w, int h, int *all_lu
     int actual_tile_w = (x_start + TILE_SIZE > w) ? (w - x_start) : TILE_SIZE;
     int actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
     total_pixels = actual_tile_w * actual_tile_h;
-    int *lut = &(all_luts[(blockIdx.y * gridDim.x + blockIdx.x) * 256]);
+    unsigned char *lut = &(all_luts[(blockIdx.y * gridDim.x + blockIdx.x) * 256]);
     __shared__ int excess;
     __shared__ int hist[256];
 
@@ -60,7 +60,7 @@ __global__ void compute_histogram(unsigned char* data, int w, int h, int *all_lu
     lut[i] = val;
 }
 
-__global__ void render_clahe(unsigned char *img_in, unsigned char *img_out, int w, int h, int *all_luts) {
+__global__ void render_clahe(unsigned char *img_in, unsigned char *img_out, int w, int h, unsigned char *all_luts) {
     float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
     int x1, x2, y1, y2, tl, tr, bl, br, val;
     int x = blockDim.x * blockIdx.x + threadIdx.x;
@@ -112,7 +112,7 @@ __global__ void render_clahe(unsigned char *img_in, unsigned char *img_out, int 
 
 unsigned char *d_img_in;
 unsigned char *d_img_out;
-int *all_luts;
+unsigned char *all_luts;
 cudaEvent_t start, stop;
 
 // Core CLAHE
@@ -139,7 +139,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     CUDA_CHECK_LAST_ERROR();
     cudaMalloc(&d_img_out, w * h * sizeof(unsigned char));
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc(&all_luts, grid_w * grid_h * 256 * sizeof(int));
+    cudaMalloc(&all_luts, grid_w * grid_h * 256 * sizeof(unsigned char));
     CUDA_CHECK_LAST_ERROR();
     cudaMemcpy(d_img_in, img_in.img, w * h * sizeof(unsigned char), cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
