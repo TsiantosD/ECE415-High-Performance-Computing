@@ -187,10 +187,11 @@ fi
 # 6. Execution Loop
 # ==========================================
 
+CU_FILE_BASENAME="${CU_FILE_SELECTED%.*}"
 LOG_DIR=""
 if [ "$ITERATIONS" -gt 1 ]; then
     TIMESTAMP=$(date +"%Y%m%d_%H%M%S_%3N")
-    LOG_DIR="results/$BASENAME/$TIMESTAMP"
+    LOG_DIR="results/$CU_FILE_BASENAME/$BASENAME/$TIMESTAMP"
     
     echo "Running $ITERATIONS times."
     echo "Logs stored in: $LOG_DIR"
@@ -210,3 +211,8 @@ do
 done
 
 echo "Done."
+
+if [ "$ITERATIONS" -gt 1 ]; then
+    echo "Creating csv from data..."
+    python3 create_csv.py "$LOG_DIR" "$LOG_DIR/report.csv"
+fi
