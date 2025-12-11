@@ -38,7 +38,7 @@ CFLAGS := $(USER_FLAGS)
 # ------------------------------------------
 
 # --- 1. Default Build (Release) ---
-all: CFLAGS += -O3
+all: CFLAGS += -O4
 all: $(TARGET)
 
 # --- 2. Debug Build ---

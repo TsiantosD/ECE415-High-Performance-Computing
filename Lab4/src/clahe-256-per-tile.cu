@@ -21,25 +21,18 @@ __global__ void compute_histogram(unsigned char* data, int w, int h, int *all_lu
     hist[i] = 0;
     __syncthreads();
 
-    // Build Histogram
-    for(int k = 0; k < 4; k++) {
-        // 1. Calculate the linear pixel index (0 to 1023)
-        int pixel_idx = 4 * i + k;
-        
-        // 2. Convert linear index to Row/Col (Math: Quotient and Remainder)
-        // We use 'actual_tile_w' to handle edge tiles safely
-        int row_offset = pixel_idx / actual_tile_w;
-        int col_offset = pixel_idx % actual_tile_w;
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
 
-        // 3. Determine global coordinates
-        int x = x_start + col_offset;
-        int y = y_start + row_offset;
+    for (int ky = 0; ky < 2; ky++) {
+        for (int kx = 0; kx < 2; kx++) {
+            int gx = x_start + tx + kx * 16;
+            int gy = y_start + ty + ky * 16;
 
-        // 4. Safety Check: 
-        // Ensure we haven't gone past the height of the tile (or image)
-        if(y < h && x < w && row_offset < actual_tile_h) {
-             unsigned char val = data[y * w + x];
-             atomicAdd(&hist[val], 1);
+            if (gx < w && gy < h && gx < x_start + TILE_SIZE && gy < y_start + TILE_SIZE) {
+                unsigned char pix = data[gy * w + gx];
+                atomicAdd(&(hist[pix]), 1);
+            }
         }
     }
 
