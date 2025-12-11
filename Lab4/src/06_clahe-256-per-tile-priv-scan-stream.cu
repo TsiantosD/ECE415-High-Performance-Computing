@@ -231,6 +231,8 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     // Unlock the pages so main() can free them safely later.
     cudaHostUnregister(img_in.img);
     cudaHostUnregister(img_out->img);
+
+    cleanUp();
     
     return elapsed;
 }
