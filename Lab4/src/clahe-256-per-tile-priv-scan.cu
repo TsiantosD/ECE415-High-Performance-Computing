@@ -8,6 +8,29 @@
 //! Lowers the number of conflicts, diminishing returns HIGH
 #define NUM_BANKS 8 
 
+__device__ void inclusive_scan(int* s_data, int tid, int n) {
+    // Iterate log2(n) times
+    for (int stride = 1; stride < n; stride *= 2) {
+        int val = 0;
+
+        // 1. Read neighbor value
+        if (tid >= stride && tid < n) {
+            val = s_data[tid - stride];
+        }
+
+        // SYNC 1: Ensure all threads have read before any write
+        __syncthreads();
+
+        // 2. Write the accumulated value
+        if (tid >= stride && tid < n) {
+            s_data[tid] += val;
+        }
+
+        // SYNC 2: Ensure all writes are done before next stride
+        __syncthreads();
+    }
+}
+
 __global__ void compute_histogram(const unsigned char* __restrict__ data, int w, int h, unsigned char* __restrict__ all_luts) {
     int tid = threadIdx.y * blockDim.x + threadIdx.x;
     int bank_id = tid % NUM_BANKS;
@@ -80,11 +103,15 @@ __global__ void compute_histogram(const unsigned char* __restrict__ data, int w,
 
     // Redistribute
     int avg_inc = excess / 256;
-    int cdf = 0;
+    hist[tid] += avg_inc;
+    
+    __syncthreads();
     
     // Compute CDF 
-    for (int j = 0; j <= tid; j++)
-        cdf += hist[j] + avg_inc;
+
+    inclusive_scan(hist, tid, 256);
+
+    int cdf = hist[tid];
     
     // Calculate Final Value
     int val = (int)((float)cdf * 255.0f / total_pixels + 0.5f);
