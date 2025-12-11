@@ -172,7 +172,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     // Allocate output image
     img_out->w = w;
     img_out->h = h;
-    img_out->img = (unsigned char *)cudaHostAlloc(w * h * sizeof(unsigned char));
+    (unsigned char *)cudaHostAlloc(&(img_out->img), w * h * sizeof(unsigned char));
 
     cudaEventCreate(&start);
     CUDA_CHECK_LAST_ERROR();
