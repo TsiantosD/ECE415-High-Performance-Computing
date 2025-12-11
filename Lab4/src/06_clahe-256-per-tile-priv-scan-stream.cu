@@ -7,7 +7,7 @@
 
 // --- CONFIGURATION ---
 #define NUM_BANKS 8 
-#define NUM_STREAMS 128
+#define NUM_STREAMS 8
 
 // --- GLOBALS ---
 unsigned char *d_img_in = NULL;
