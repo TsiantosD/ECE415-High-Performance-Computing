@@ -243,4 +243,5 @@ void cleanUp() {
     for(int i=0; i<NUM_STREAMS; i++) cudaStreamDestroy(streams[i]);
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
+    cudaDeviceReset();
 }
