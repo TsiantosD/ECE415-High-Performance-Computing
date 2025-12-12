@@ -1,0 +1,31 @@
+Filename,GPU Throughput (MPixels/s)
+run_1.log,1002.89
+run_2.log,985.76
+run_3.log,956.08
+run_4.log,910.9
+run_5.log,943.64
+run_6.log,966.23
+run_7.log,945.96
+run_8.log,950.01
+run_9.log,950.29
+run_10.log,951.43
+run_11.log,989.88
+run_12.log,956.33
+run_13.log,965.17
+run_14.log,856.16
+run_15.log,521.12
+run_16.log,838.35
+run_17.log,888.11
+run_18.log,937.1
+run_19.log,940.03
+run_20.log,722.34
+run_21.log,854.68
+run_22.log,868.28
+run_23.log,903.42
+run_24.log,866.22
+run_25.log,955.96
+,
+--- STATISTICS (Excluding Min/Max) ---,
+Average,917.4926
+Standard Deviation,61.3885
+Note,(Removed min: 521.12 and max: 1002.89)
