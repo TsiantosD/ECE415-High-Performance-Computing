@@ -168,7 +168,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
 
     int grid_w = (w + TILE_SIZE - 1) / TILE_SIZE;
     int grid_h = (h + TILE_SIZE - 1) / TILE_SIZE;
-    int tiles_per_strip = (grid_h + NUM_STREAMS - 1) / NUM_STREAMS;
+    int strip_h = (grid_h + NUM_STREAMS - 1) / NUM_STREAMS;
 
     img_out->w = w;
     img_out->h = h;
@@ -237,10 +237,10 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     dim3 dimBlockRender(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
 
     for (int i = 0; i < NUM_STREAMS; i++) {
-        int strip_start_grid = i * tiles_per_strip;
+        int strip_start_grid = i * strip_h;
         if (strip_start_grid >= grid_h) break;
 
-        int current_strip_h_tiles = tiles_per_strip;
+        int current_strip_h_tiles = strip_h;
         if (strip_start_grid + current_strip_h_tiles > grid_h) {
             current_strip_h_tiles = grid_h - strip_start_grid;
         }
