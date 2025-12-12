@@ -9,24 +9,17 @@
 #define NUM_BANKS 8 
 
 __device__ void inclusive_scan(int* s_data, int tid, int n) {
-    // Iterate log2(n) times
     for (int stride = 1; stride < n; stride *= 2) {
         int val = 0;
 
-        // 1. Read neighbor value
-        if (tid >= stride && tid < n) {
+        if (tid >= stride && tid < n)
             val = s_data[tid - stride];
-        }
 
-        // SYNC 1: Ensure all threads have read before any write
         __syncthreads();
 
-        // 2. Write the accumulated value
-        if (tid >= stride && tid < n) {
+        if (tid >= stride && tid < n)
             s_data[tid] += val;
-        }
 
-        // SYNC 2: Ensure all writes are done before next stride
         __syncthreads();
     }
 }
@@ -48,7 +41,6 @@ __global__ void compute_histogram(const unsigned char* __restrict__ data, int w,
     int actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
     int total_pixels = actual_tile_w * actual_tile_h;
     
-    //! The +1 will prevent bank conflicts when reading/writing on p_hist  
     __shared__ int p_hist[NUM_BANKS][256]; 
     __shared__ int hist[256];
     __shared__ int excess;
@@ -59,7 +51,7 @@ __global__ void compute_histogram(const unsigned char* __restrict__ data, int w,
         p_hist[i][tid] = 0;
     }
     
-    hist[tid] = 0; //TODO no need to check < 256 right?
+    hist[tid] = 0;
     
     __syncthreads();
 
@@ -72,7 +64,6 @@ __global__ void compute_histogram(const unsigned char* __restrict__ data, int w,
             int gy = y_start + cur_y;
 
             if (gx < w && gy < h) {
-                //TODO i think this is coalesced reads since in global mem right?
                 unsigned char pix = data[gy * w + gx];
                 
                 //! 1/<NUM_BANKS>th of the serialization 

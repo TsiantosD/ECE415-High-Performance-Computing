@@ -5,11 +5,10 @@
 #include "clahe.h"
 #include "gputimer.h"
 
-// --- CONFIGURATION ---
+//! Lowers the number of conflicts, diminishing returns HIGH
 #define NUM_BANKS 8
 #define NUM_STREAMS 8
 
-// --- GLOBALS ---
 unsigned char *d_img_in = NULL;
 unsigned char *d_img_out = NULL;
 unsigned char *all_luts = NULL;
@@ -17,18 +16,22 @@ unsigned char *all_luts = NULL;
 cudaEvent_t start, stop;
 cudaStream_t streams[NUM_STREAMS];
 
-// --- DEVICE FUNCTIONS ---
 __device__ void inclusive_scan(int* s_data, int tid, int n) {
     for (int stride = 1; stride < n; stride *= 2) {
         int val = 0;
-        if (tid >= stride && tid < n) val = s_data[tid - stride];
+
+        if (tid >= stride && tid < n)
+            val = s_data[tid - stride];
+
         __syncthreads();
-        if (tid >= stride && tid < n) s_data[tid] += val;
+
+        if (tid >= stride && tid < n)
+            s_data[tid] += val;
+
         __syncthreads();
     }
 }
 
-// --- KERNELS ---
 __global__ void compute_histogram(
     const unsigned char* __restrict__ data,
     int w, int h,
@@ -60,12 +63,15 @@ __global__ void compute_histogram(
     __shared__ int hist[256];
     __shared__ int excess;
 
+
+    //! Initialize private and shared histograms
     #pragma unroll
     for (int i = 0; i < NUM_BANKS; i++) p_hist[i][tid] = 0;
     hist[tid] = 0;
     __syncthreads();
 
-    // Loop over the tile pixels
+    //! Add histogram values to seperate private histograms
+    //* Indexing increased by blockDim (here is 16) 1 pixel for each quadrant
     for (int cur_y = ty; cur_y < TILE_SIZE; cur_y += step_y) {
         for (int cur_x = tx; cur_x < TILE_SIZE; cur_x += step_x) {
             int gx = x_start + cur_x;
@@ -73,16 +79,20 @@ __global__ void compute_histogram(
 
             if (gx < w && gy < h) {
                 unsigned char pix = data[gy * w + gx];
+
+                //! 1/<NUM_BANKS>th of the serialization 
                 atomicAdd(&(p_hist[bank_id][pix]), 1);
             }
         }
     }
     __syncthreads();
 
-    // Sum banks
+    //! Sum the banks into the final result
     int bin_sum = 0;
     #pragma unroll
-    for (int k = 0; k < NUM_BANKS; k++) bin_sum += p_hist[k][tid];
+    for (int k = 0; k < NUM_BANKS; k++) {
+        bin_sum += p_hist[k][tid];
+    }
     hist[tid] = bin_sum;
 
     if (tid == 0) excess = 0;
@@ -106,7 +116,7 @@ __global__ void compute_histogram(
     int val = (int)((float)cdf * 255.0f / total_pixels + 0.5f);
     if (val > 255) val = 255;
 
-    // Correct global indexing using the passed full_grid_w
+    // Global indexing using full_grid_w
     int lut_index = (global_by * full_grid_w + global_bx) * 256;
     all_luts[lut_index + tid] = (unsigned char)val;
 }
@@ -128,6 +138,9 @@ __global__ void render_clahe(
 
     if (x >= w || y >= h) return;
 
+    // Find relative position in the grid
+    // (y / TILE_SIZE) gives the tile index, but we want the center approach
+    // So we offset by 0.5 to align interpolation with tile centers
     ty_f = (float)y / TILE_SIZE - 0.5f;
     tx_f = (float)x / TILE_SIZE - 0.5f;
 
@@ -136,9 +149,12 @@ __global__ void render_clahe(
     y2 = y1 + 1;
     x2 = x1 + 1;
 
+    // Weights for interpolation
     y_weight = ty_f - y1;
     x_weight = tx_f - x1;
 
+    // Clamp tile indices to boundaries 
+    // If a pixel is near the edge, it might not have 4 neighbors
     if (x1 < 0) x1 = 0;
     if (x2 >= gridDim.x) x2 = gridDim.x - 1; // gridDim.x is still full width
     if (y1 < 0) y1 = 0;
@@ -146,6 +162,8 @@ __global__ void render_clahe(
     // Use full_grid_h instead of gridDim.y because we are in a partial grid
     if (y2 >= full_grid_h) y2 = full_grid_h - 1;
 
+
+    // Original pixel intensity
     val = img_in[y * w + x];
 
     // LUT lookup uses full grid width/height logic
@@ -154,6 +172,7 @@ __global__ void render_clahe(
     bl = all_luts[(y2 * gridDim.x + x1) * 256 + val];
     br = all_luts[(y2 * gridDim.x + x2) * 256 + val];
 
+    // Bilinear interpolation
     top = tl * (1.0f - x_weight) + tr * x_weight;
     bot = bl * (1.0f - x_weight) + br * x_weight;
     final_val = top * (1.0f - y_weight) + bot * y_weight;
@@ -166,6 +185,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     int h = img_in.h;
     float elapsed;
 
+    // Calculate grid dimensions
     int grid_w = (w + TILE_SIZE - 1) / TILE_SIZE;
     int grid_h = (h + TILE_SIZE - 1) / TILE_SIZE;
     int strip_h = (grid_h + NUM_STREAMS - 1) / NUM_STREAMS;
@@ -233,7 +253,6 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     // Wait for all histograms to complete
     cudaDeviceSynchronize();
 
-    // --- Render & D2H Copy ---
     dim3 dimBlockRender(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
 
     for (int i = 0; i < NUM_STREAMS; i++) {
@@ -281,7 +300,6 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     return elapsed;
 }
 
-// Called by main() at program exit
 void cleanUp() {
     cudaFree(d_img_in);
     cudaFree(d_img_out);

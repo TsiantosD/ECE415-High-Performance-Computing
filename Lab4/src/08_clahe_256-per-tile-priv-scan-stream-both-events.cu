@@ -5,11 +5,10 @@
 #include "clahe.h"
 #include "gputimer.h"
 
-// --- CONFIGURATION ---
+//! Lowers the number of conflicts, diminishing returns HIGH
 #define NUM_BANKS 8
 #define NUM_STREAMS 8
 
-// --- GLOBALS ---
 unsigned char *d_img_in = NULL;
 unsigned char *d_img_out = NULL;
 unsigned char *all_luts = NULL;
@@ -18,8 +17,7 @@ cudaEvent_t start, stop;
 cudaStream_t streams[NUM_STREAMS];
 cudaEvent_t hist_events[NUM_STREAMS];
 
-// --- DEVICE FUNCTIONS ---
-__device__ void inclusive_scan(int* s_data, int tid, int n) {
+__device__ void inclusive_scan(int* const s_data, const int tid, const int n) {
     for (int stride = 1; stride < n; stride *= 2) {
         int val = 0;
         if (tid >= stride && tid < n) val = s_data[tid - stride];
@@ -29,142 +27,164 @@ __device__ void inclusive_scan(int* s_data, int tid, int n) {
     }
 }
 
-// --- KERNELS ---
 __global__ void compute_histogram(
-    const unsigned char* __restrict__ data,
-    int w, int h,
-    unsigned char* __restrict__ all_luts,
-    int block_offset_x,
-    int block_offset_y,
-    int full_grid_w
+    const unsigned char* const __restrict__ data,
+    const int w, const int h,
+    unsigned char* const __restrict__ all_luts,
+    const int block_offset_x,
+    const int block_offset_y,
+    const int full_grid_w
 ) {
-    int tid = threadIdx.y * blockDim.x + threadIdx.x;
-    int bank_id = tid % NUM_BANKS;
+    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    const int bank_id = tid % NUM_BANKS;
 
-    int global_bx = blockIdx.x + block_offset_x;
-    int global_by = blockIdx.y + block_offset_y;
+    // Adjust logic to handle strips (block_offset_x will be 0, block_offset_y will be strip start)
+    const int global_bx = blockIdx.x + block_offset_x;
+    const int global_by = blockIdx.y + block_offset_y;
 
-    int x_start = global_bx * TILE_SIZE;
-    int y_start = global_by * TILE_SIZE;
+    const int x_start = global_bx * TILE_SIZE;
+    const int y_start = global_by * TILE_SIZE;
 
-    int step_x = blockDim.x;
-    int step_y = blockDim.y;
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
+    const int step_x = blockDim.x;
+    const int step_y = blockDim.y;
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
 
-    int actual_tile_w = (x_start + TILE_SIZE > w) ? (w - x_start) : TILE_SIZE;
-    int actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
-    int total_pixels = actual_tile_w * actual_tile_h;
+    const int actual_tile_w = (x_start + TILE_SIZE > w) ? (w - x_start) : TILE_SIZE;
+    const int actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
+    const int total_pixels = actual_tile_w * actual_tile_h;
 
     __shared__ int p_hist[NUM_BANKS][256];
     __shared__ int hist[256];
     __shared__ int excess;
 
+    //! Initialize private and shared histograms
     #pragma unroll
     for (int i = 0; i < NUM_BANKS; i++) p_hist[i][tid] = 0;
     hist[tid] = 0;
     __syncthreads();
 
+    //! Add histogram values to seperate private histograms
+    //* Indexing increased by blockDim (here is 16) 1 pixel for each quadrant
     for (int cur_y = ty; cur_y < TILE_SIZE; cur_y += step_y) {
         for (int cur_x = tx; cur_x < TILE_SIZE; cur_x += step_x) {
-            int gx = x_start + cur_x;
-            int gy = y_start + cur_y;
+            const int gx = x_start + cur_x;
+            const int gy = y_start + cur_y;
 
             if (gx < w && gy < h) {
-                unsigned char pix = data[gy * w + gx];
+                const unsigned char pix = data[gy * w + gx];
+
+                //! 1/<NUM_BANKS>th of the serialization 
                 atomicAdd(&(p_hist[bank_id][pix]), 1);
             }
         }
     }
     __syncthreads();
 
+    //! Sum the banks into the final result
     int bin_sum = 0;
     #pragma unroll
-    for (int k = 0; k < NUM_BANKS; k++) bin_sum += p_hist[k][tid];
+    for (int k = 0; k < NUM_BANKS; k++) {
+        bin_sum += p_hist[k][tid];
+    }
     hist[tid] = bin_sum;
 
     if (tid == 0) excess = 0;
     __syncthreads();
 
+    // Clip
     if (hist[tid] > CLIP_LIMIT) {
         atomicAdd(&excess, (hist[tid] - CLIP_LIMIT));
         hist[tid] = CLIP_LIMIT;
     }
     __syncthreads();
 
-    int avg_inc = excess / 256;
+    // Redistribute
+    const int avg_inc = excess / 256;
     hist[tid] += avg_inc;
     __syncthreads();
 
+    // CDF & LUT write
     inclusive_scan(hist, tid, 256);
-    int cdf = hist[tid];
+    const int cdf = hist[tid];
+    
+    // Calculate final value
     int val = (int)((float)cdf * 255.0f / total_pixels + 0.5f);
-    if (val > 255) val = 255;
+    if (val > 255) val = 255; // 'val' is modified, cannot be const
 
-    int lut_index = (global_by * full_grid_w + global_bx) * 256;
+    // Global indexing using full_grid_w
+    const int lut_index = (global_by * full_grid_w + global_bx) * 256;
     all_luts[lut_index + tid] = (unsigned char)val;
 }
 
 __global__ void render_clahe(
-    unsigned char *img_in,
-    unsigned char *img_out,
-    int w, int h,
-    unsigned char *all_luts,
-    int block_offset_y,
-    int full_grid_h
+    const unsigned char* const __restrict__ img_in,
+    unsigned char* const __restrict__ img_out,
+    const int w, const int h,
+    const unsigned char* const __restrict__ all_luts,
+    const int block_offset_y,
+    const int full_grid_h
 ) {
-    float tx_f, ty_f, x_weight, y_weight, top, bot, final_val;
-    int x1, x2, y1, y2, tl, tr, bl, br, val;
-
-    int x = blockDim.x * blockIdx.x + threadIdx.x;
-    int y = blockDim.y * (blockIdx.y + block_offset_y) + threadIdx.y;
+    // Adjust Y calculation based on strip offset
+    const int x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int y = blockDim.y * (blockIdx.y + block_offset_y) + threadIdx.y;
 
     if (x >= w || y >= h) return;
 
-    ty_f = (float)y / TILE_SIZE - 0.5f;
-    tx_f = (float)x / TILE_SIZE - 0.5f;
+    // Find relative position in the grid
+    // (y / TILE_SIZE) gives the tile index, but we want the center approach
+    // So we offset by 0.5 to align interpolation with tile centers
+    const float ty_f = (float)y / TILE_SIZE - 0.5f;
+    const float tx_f = (float)x / TILE_SIZE - 0.5f;
 
-    y1 = (int)floor(ty_f);
-    x1 = (int)floor(tx_f);
-    y2 = y1 + 1;
-    x2 = x1 + 1;
+    // These are modified for boundary checking, cannot be const
+    int y1 = (int)floor(ty_f);
+    int x1 = (int)floor(tx_f);
+    int y2 = y1 + 1;
+    int x2 = x1 + 1;
 
-    y_weight = ty_f - y1;
-    x_weight = tx_f - x1;
+    // Weights for interpolation
+    const float y_weight = ty_f - y1;
+    const float x_weight = tx_f - x1;
 
+    // Clamp tile indices to boundaries 
+    // If a pixel is near the edge, it might not have 4 neighbors
     if (x1 < 0) x1 = 0;
-    if (x2 >= gridDim.x) x2 = gridDim.x - 1;
+    if (x2 >= gridDim.x) x2 = gridDim.x - 1;  // gridDim.x is still full width
     if (y1 < 0) y1 = 0;
 
-    // Bounds check using full grid height, not just the strip height
+    // Bounds check using full grid height
     if (y2 >= full_grid_h) y2 = full_grid_h - 1;
+    
+    // Original pixel intensity
+    const int val = img_in[y * w + x];
 
-    val = img_in[y * w + x];
+    // LUT lookup uses full grid width/height logic
+    const int tl = all_luts[(y1 * gridDim.x + x1) * 256 + val];
+    const int tr = all_luts[(y1 * gridDim.x + x2) * 256 + val];
+    const int bl = all_luts[(y2 * gridDim.x + x1) * 256 + val];
+    const int br = all_luts[(y2 * gridDim.x + x2) * 256 + val];
 
-    tl = all_luts[(y1 * gridDim.x + x1) * 256 + val];
-    tr = all_luts[(y1 * gridDim.x + x2) * 256 + val];
-    bl = all_luts[(y2 * gridDim.x + x1) * 256 + val];
-    br = all_luts[(y2 * gridDim.x + x2) * 256 + val];
-
-    top = tl * (1.0f - x_weight) + tr * x_weight;
-    bot = bl * (1.0f - x_weight) + br * x_weight;
-    final_val = top * (1.0f - y_weight) + bot * y_weight;
+    // Bilinear interpolation
+    const float top = tl * (1.0f - x_weight) + tr * x_weight;
+    const float bot = bl * (1.0f - x_weight) + br * x_weight;
+    const float final_val = top * (1.0f - y_weight) + bot * y_weight;
 
     img_out[y * w + x] = (unsigned char)(final_val + 0.5f);
 }
 
-double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
-    int w = img_in.w;
-    int h = img_in.h;
-    float elapsed;
-
-    int grid_w = (w + TILE_SIZE - 1) / TILE_SIZE;
-    int grid_h = (h + TILE_SIZE - 1) / TILE_SIZE;
-    int tiles_per_strip = (grid_h + NUM_STREAMS - 1) / NUM_STREAMS;
+double d_apply_clahe(const PGM_IMG img_in, PGM_IMG * const img_out) {
+    const int w = img_in.w;
+    const int h = img_in.h;
+    
+    // Calculate grid dimensions
+    const int grid_w = (w + TILE_SIZE - 1) / TILE_SIZE;
+    const int grid_h = (h + TILE_SIZE - 1) / TILE_SIZE;
+    const int tiles_per_strip = (grid_h + NUM_STREAMS - 1) / NUM_STREAMS;
 
     img_out->w = w;
     img_out->h = h;
-    int size = w * h * sizeof(unsigned char);
+    const int size = w * h * sizeof(unsigned char);
     img_out->img = (unsigned char *)malloc(size);
 
     cudaEventCreate(&start);
@@ -173,8 +193,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     // --- TIMER START ---
     cudaEventRecord(start);
 
-    // --- SETUP: Allocate & Pin Memory ---
-    // Moved OUTSIDE the timer. Pinning is OS-heavy and distorts your algo benchmark.
+    // Pin so the GPU can access it asynchronously.
     cudaHostRegister(img_in.img, size, cudaHostRegisterDefault);
     cudaHostRegister(img_out->img, size, cudaHostRegisterDefault);
 
@@ -187,54 +206,54 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
         cudaEventCreate(&hist_events[i]);
     }
 
-    // --- PHASE 1: Copy H2D + Compute Histograms ---
     for (int i = 0; i < NUM_STREAMS; i++) {
-        int strip_start_grid = i * tiles_per_strip;
+        const int strip_start_grid = i * tiles_per_strip;
+
+        // The start of strip is out of the image
         if (strip_start_grid >= grid_h) {
-            // Signal empty streams are "done" so others don't wait forever
             cudaEventRecord(hist_events[i], streams[i]);
             continue;
         }
 
+        // Last strip height check
         int current_strip_h_tiles = tiles_per_strip;
+
         if (strip_start_grid + current_strip_h_tiles > grid_h) {
             current_strip_h_tiles = grid_h - strip_start_grid;
         }
 
-        int start_pixel_y = strip_start_grid * TILE_SIZE;
+        const int start_pixel_y = strip_start_grid * TILE_SIZE;
+        
+        // Find the start and end row of the stream
         int end_pixel_y = start_pixel_y + (current_strip_h_tiles * TILE_SIZE);
         if (end_pixel_y > h) end_pixel_y = h;
 
-        int num_pixel_rows = end_pixel_y - start_pixel_y;
+        const int num_pixel_rows = end_pixel_y - start_pixel_y;
         if (num_pixel_rows <= 0) {
-             cudaEventRecord(hist_events[i], streams[i]);
-             continue;
+            cudaEventRecord(hist_events[i], streams[i]);
+            continue;
         }
 
-        int chunk_size_bytes = num_pixel_rows * w * sizeof(unsigned char);
-        int pixel_offset = start_pixel_y * w;
+        const int chunk_size_bytes = num_pixel_rows * w * sizeof(unsigned char);
+        const int pixel_offset = start_pixel_y * w;
 
         cudaMemcpyAsync(d_img_in + pixel_offset, img_in.img + pixel_offset,
                         chunk_size_bytes, cudaMemcpyHostToDevice, streams[i]);
 
-        dim3 dimGrid(grid_w, current_strip_h_tiles);
-        dim3 dimBlock(16, 16);
+        const dim3 dimGrid(grid_w, current_strip_h_tiles);
+        const dim3 dimBlock(16, 16);
 
         compute_histogram<<<dimGrid, dimBlock, 0, streams[i]>>>(
             d_img_in, w, h, all_luts, 0, strip_start_grid, grid_w
         );
 
-        // Record that this stream's histogram is done
         cudaEventRecord(hist_events[i], streams[i]);
     }
 
-    // NOTE: Removed cudaDeviceSynchronize(). We use events for granular dependency instead.
-
-    // --- PHASE 2: Render + Copy D2H ---
-    dim3 dimBlockRender(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
+    const dim3 dimBlockRender(w > TILE_SIZE ? TILE_SIZE : w, h > TILE_SIZE ? TILE_SIZE : h);
 
     for (int i = 0; i < NUM_STREAMS; i++) {
-        int strip_start_grid = i * tiles_per_strip;
+        const int strip_start_grid = i * tiles_per_strip;
         if (strip_start_grid >= grid_h) break;
 
         int current_strip_h_tiles = tiles_per_strip;
@@ -242,40 +261,35 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
             current_strip_h_tiles = grid_h - strip_start_grid;
         }
 
-        // DEPENDENCIES:
-        // Render Stream 'i' needs LUTs from strips 'i-1', 'i', and 'i+1'
-        // because bilinear interpolation crosses strip boundaries.
-        cudaStreamWaitEvent(streams[i], hist_events[i], 0);             // Need my own histograms
-        if (i > 0) cudaStreamWaitEvent(streams[i], hist_events[i-1], 0); // Need previous strip (top edge)
-        if (i < NUM_STREAMS - 1) cudaStreamWaitEvent(streams[i], hist_events[i+1], 0); // Need next strip (bottom edge)
+        cudaStreamWaitEvent(streams[i], hist_events[i], 0);
+        if (i > 0) cudaStreamWaitEvent(streams[i], hist_events[i-1], 0);
+        if (i < NUM_STREAMS - 1) cudaStreamWaitEvent(streams[i], hist_events[i+1], 0);
 
-        int start_pixel_y = strip_start_grid * TILE_SIZE;
+        const int start_pixel_y = strip_start_grid * TILE_SIZE;
         int end_pixel_y = start_pixel_y + (current_strip_h_tiles * TILE_SIZE);
         if (end_pixel_y > h) end_pixel_y = h;
 
-        int num_pixel_rows = end_pixel_y - start_pixel_y;
+        const int num_pixel_rows = end_pixel_y - start_pixel_y;
         if (num_pixel_rows <= 0) continue;
 
-        int chunk_size_bytes = num_pixel_rows * w * sizeof(unsigned char);
-        int pixel_offset = start_pixel_y * w;
+        const int chunk_size_bytes = num_pixel_rows * w * sizeof(unsigned char);
+        const int pixel_offset = start_pixel_y * w;
 
-        // Render Strip
-        dim3 dimGridRender(grid_w, current_strip_h_tiles);
+        const dim3 dimGridRender(grid_w, current_strip_h_tiles);
         render_clahe<<<dimGridRender, dimBlockRender, 0, streams[i]>>>(
             d_img_in, d_img_out, w, h, all_luts, strip_start_grid, grid_h
         );
 
-        // Async Copy Back (Requires pinned memory to work!)
         cudaMemcpyAsync(img_out->img + pixel_offset, d_img_out + pixel_offset,
                         chunk_size_bytes, cudaMemcpyDeviceToHost, streams[i]);
     }
 
     cudaEventRecord(stop);
-    cudaEventSynchronize(stop); // Wait for GPU to finish
+    cudaEventSynchronize(stop);
+    
+    float elapsed;
     cudaEventElapsedTime(&elapsed, start, stop);
 
-    // --- CLEANUP ---
-    // Unregister AFTER the GPU is done
     cudaHostUnregister(img_in.img);
     cudaHostUnregister(img_out->img);
 
