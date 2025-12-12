@@ -58,7 +58,7 @@ __global__ void compute_histogram(
     int actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
     int total_pixels = actual_tile_w * actual_tile_h;
 
-    __shared__ int p_hist[NUM_BANKS][256 + 1];
+    __shared__ int p_hist[NUM_BANKS][256];
     __shared__ int hist[256];
     __shared__ int excess;
 

@@ -49,7 +49,7 @@ __global__ void compute_histogram(const unsigned char* __restrict__ data, int w,
     int total_pixels = actual_tile_w * actual_tile_h;
     
     //! The +1 will prevent bank conflicts when reading/writing on p_hist  
-    __shared__ int p_hist[NUM_BANKS][256 + 1]; 
+    __shared__ int p_hist[NUM_BANKS][256]; 
     __shared__ int hist[256];
     __shared__ int excess;
 
