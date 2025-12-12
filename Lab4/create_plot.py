@@ -10,7 +10,7 @@ value_col = "GPU Throughput (MPixels/s)"
 filename_col = "Filename"
 
 # Locate all CSV files in the current directory
-csv_files = glob.glob("data/*.csv")
+csv_files = glob.glob("csv/*.csv")
 
 if not csv_files:
     print("No CSV files found in the current directory.")
