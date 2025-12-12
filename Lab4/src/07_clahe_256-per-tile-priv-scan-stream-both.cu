@@ -190,34 +190,44 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     cudaMalloc(&all_luts, grid_w * grid_h * 256 * sizeof(unsigned char));
 
     for (int i = 0; i < NUM_STREAMS; i++) {
-        int strip_start_grid = i * tiles_per_strip;
+        int strip_offset_y = i * strip_h;
 
-        if (strip_start_grid >= grid_h) break;
+        // The start of strip is out of the image
+        if (strip_offset_y >= grid_h)
+            break;
 
-        int current_strip_h_tiles = tiles_per_strip;
-        if (strip_start_grid + current_strip_h_tiles > grid_h) {
-            current_strip_h_tiles = grid_h - strip_start_grid;
-        }
+        // Last strip height check
+        int current_strip_h = strip_h;
 
-        int start_pixel_y = strip_start_grid * TILE_SIZE;
-        int end_pixel_y = start_pixel_y + (current_strip_h_tiles * TILE_SIZE);
-        if (end_pixel_y > h) end_pixel_y = h;
+        if (strip_offset_y + current_strip_h > grid_h)
+            current_strip_h = grid_h - strip_offset_y;
 
-        int num_pixel_rows = end_pixel_y - start_pixel_y;
-        if (num_pixel_rows <= 0) continue;
+        // Find the start and end row of the stream
+        int strip_offset_y_pixel = strip_offset_y * TILE_SIZE;
+        int end_pixel_y = strip_offset_y_pixel + (current_strip_h * TILE_SIZE);
 
+        if (end_pixel_y > h)
+            end_pixel_y = h;
+
+        int num_pixel_rows = end_pixel_y - strip_offset_y_pixel;
+
+        if (num_pixel_rows <= 0)
+            continue;
+
+        // Find size of strip and start of strip (both in pixels)
         int chunk_size_bytes = num_pixel_rows * w * sizeof(unsigned char);
-        int pixel_offset = start_pixel_y * w;
+        int pixel_offset = strip_offset_y_pixel * w;
 
         unsigned char* h_src_ptr = img_in.img + pixel_offset;
         unsigned char* d_dst_ptr = d_img_in + pixel_offset;
 
+        // Transfer strip H2D
         cudaMemcpyAsync(d_dst_ptr, h_src_ptr, chunk_size_bytes, cudaMemcpyHostToDevice, streams[i]);
 
-        dim3 dimGrid(grid_w, current_strip_h_tiles);
+        dim3 dimGrid(grid_w, current_strip_h);
         dim3 dimBlock(16, 16);
 
-        compute_histogram<<<dimGrid, dimBlock, 0, streams[i]>>>(d_img_in, w, h, all_luts, 0, strip_start_grid, grid_w);
+        compute_histogram<<<dimGrid, dimBlock, 0, streams[i]>>>(d_img_in, w, h, all_luts, 0, strip_offset_y, grid_w);
     }
 
     // Wait for all histograms to complete
