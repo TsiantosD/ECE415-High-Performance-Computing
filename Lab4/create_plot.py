@@ -8,7 +8,7 @@ import os
 value_col = "GPU Throughput (MPixels/s)"
 filename_col = "Filename"
 
-csv_files = glob.glob("csv/*.csv")
+csv_files = glob.glob("csv-planet_surface/*.csv")
 
 if not csv_files:
     print("No CSV files found in the current directory.")
