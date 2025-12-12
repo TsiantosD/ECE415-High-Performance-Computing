@@ -25,8 +25,7 @@ __global__ void compute_histogram(const unsigned char* __restrict__ data, int w,
     int actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
     int total_pixels = actual_tile_w * actual_tile_h;
     
-    //! The +1 will prevent bank conflicts when reading/writing on p_hist  
-    __shared__ int p_hist[NUM_BANKS][256 + 1]; 
+    __shared__ int p_hist[NUM_BANKS][256]; 
     __shared__ int hist[256];
     __shared__ int excess;
 
@@ -36,8 +35,7 @@ __global__ void compute_histogram(const unsigned char* __restrict__ data, int w,
         p_hist[i][tid] = 0;
     }
     
-    hist[tid] = 0; //TODO no need to check < 256 right?
-    
+    hist[tid] = 0;
     __syncthreads();
 
     //! Add histogram values to seperate private histograms
@@ -49,7 +47,6 @@ __global__ void compute_histogram(const unsigned char* __restrict__ data, int w,
             int gy = y_start + cur_y;
 
             if (gx < w && gy < h) {
-                //TODO i think this is coalesced reads since in global mem right?
                 unsigned char pix = data[gy * w + gx];
                 
                 //! 1/<NUM_BANKS>th of the serialization 

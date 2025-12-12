@@ -5,6 +5,7 @@
 #include "clahe.h"
 #include "gputimer.h"
 
+//! Lowers the number of conflicts, diminishing returns HIGH
 #define NUM_BANKS 8
 #define NUM_STREAMS 8
 
@@ -58,16 +59,18 @@ __global__ void compute_histogram(
     int actual_tile_h = (y_start + TILE_SIZE > h) ? (h - y_start) : TILE_SIZE;
     int total_pixels = actual_tile_w * actual_tile_h;
 
-    __shared__ int p_hist[NUM_BANKS][256 + 1];
+    __shared__ int p_hist[NUM_BANKS][256];
     __shared__ int hist[256];
     __shared__ int excess;
 
+    //! Initialize private and shared histograms
     #pragma unroll
     for (int i = 0; i < NUM_BANKS; i++) p_hist[i][tid] = 0;
     hist[tid] = 0;
     __syncthreads();
 
-    // Loop over the tile pixels
+    //! Add histogram values to seperate private histograms
+    //* Indexing increased by blockDim (here is 16) 1 pixel for each quadrant
     for (int cur_y = ty; cur_y < TILE_SIZE; cur_y += step_y) {
         for (int cur_x = tx; cur_x < TILE_SIZE; cur_x += step_x) {
             int gx = x_start + cur_x;
@@ -75,16 +78,20 @@ __global__ void compute_histogram(
 
             if (gx < w && gy < h) {
                 unsigned char pix = data[gy * w + gx];
+
+                //! 1/<NUM_BANKS>th of the serialization 
                 atomicAdd(&(p_hist[bank_id][pix]), 1);
             }
         }
     }
     __syncthreads();
 
-    // Sum banks
+    //! Sum the banks into the final result
     int bin_sum = 0;
     #pragma unroll
-    for (int k = 0; k < NUM_BANKS; k++) bin_sum += p_hist[k][tid];
+    for (int k = 0; k < NUM_BANKS; k++) {
+        bin_sum += p_hist[k][tid];
+    }
     hist[tid] = bin_sum;
 
     if (tid == 0) excess = 0;
@@ -108,7 +115,7 @@ __global__ void compute_histogram(
     int val = (int)((float)cdf * 255.0f / total_pixels + 0.5f);
     if (val > 255) val = 255;
 
-    // Correct global indexing using the passed full_grid_w
+    // Global indexing using full_grid_w
     int lut_index = (global_by * full_grid_w + global_bx) * 256;
     all_luts[lut_index + tid] = (unsigned char)val;
 }
@@ -120,6 +127,9 @@ __global__ void render_clahe(unsigned char *img_in, unsigned char *img_out, int 
     int y = blockDim.y * blockIdx.y + threadIdx.y;
     if (x >= w || y >= h) return;
 
+    // Find relative position in the grid
+    // (y / TILE_SIZE) gives the tile index, but we want the center approach
+    // So we offset by 0.5 to align interpolation with tile centers
     ty_f = (float)y / TILE_SIZE - 0.5f;
     tx_f = (float)x / TILE_SIZE - 0.5f;
 
@@ -128,21 +138,27 @@ __global__ void render_clahe(unsigned char *img_in, unsigned char *img_out, int 
     y2 = y1 + 1;
     x2 = x1 + 1;
 
+    // Weights for interpolation
     y_weight = ty_f - y1;
     x_weight = tx_f - x1;
 
+    // Clamp tile indices to boundaries 
+    // If a pixel is near the edge, it might not have 4 neighbors
     if (x1 < 0) x1 = 0;
     if (x2 >= gridDim.x) x2 = gridDim.x - 1;
     if (y1 < 0) y1 = 0;
     if (y2 >= gridDim.y) y2 = gridDim.y - 1;
 
+    // Original pixel intensity
     val = img_in[y * w + x];
 
+    // Fetch mapped values from the 4 nearest tile LUTs
     tl = all_luts[(y1 * gridDim.x + x1) * 256 + val];
     tr = all_luts[(y1 * gridDim.x + x2) * 256 + val];
     bl = all_luts[(y2 * gridDim.x + x1) * 256 + val];
     br = all_luts[(y2 * gridDim.x + x2) * 256 + val];
 
+    // Bilinear interpolation
     top = tl * (1.0f - x_weight) + tr * x_weight;
     bot = bl * (1.0f - x_weight) + br * x_weight;
     final_val = top * (1.0f - y_weight) + bot * y_weight;
@@ -155,6 +171,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     int h = img_in.h;
     float elapsed;
 
+    // Calculate grid dimensions
     int grid_w = (w + TILE_SIZE - 1) / TILE_SIZE;
     int grid_h = (h + TILE_SIZE - 1) / TILE_SIZE;
     int strip_h = (grid_h + NUM_STREAMS - 1) / NUM_STREAMS;
@@ -168,7 +185,7 @@ double d_apply_clahe(PGM_IMG img_in, PGM_IMG *img_out) {
     cudaEventCreate(&stop);
 
     cudaEventRecord(start);
-    // Pin so the GPU can access it asynchronously.
+    // Pin so the GPU can access it asynchronously
     cudaHostRegister(img_in.img, size, cudaHostRegisterDefault);
     cudaHostRegister(img_out->img, size, cudaHostRegisterDefault);
 
