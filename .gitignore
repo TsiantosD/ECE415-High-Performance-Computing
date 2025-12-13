@@ -1,2 +1,4 @@
 .vscode
 .idea
+cudaTesting
+*.nsys-rep
