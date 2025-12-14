@@ -3,36 +3,34 @@
 #include <stdlib.h>
 #include <string.h>
 #include "timer.h"
-#include <omp.h>
 
 #define SOFTENING 0.01f
 
 typedef struct {
-    float x, y, z;
-    float vx, vy, vz;
+    float x, y, z, vx, vy, vz;
 } Body;
 
-void bodyForce(Body * restrict p, float dt, int n)
-{
-    #pragma omp for schedule(static)
-    for (int i = 0; i < n; i++) {
-        float Fx = 0.0f;
-        float Fy = 0.0f;
-        float Fz = 0.0f;
+/* Update a single galaxy. Parameters:
+    - array of bodies
+    - time step
+    - number of bodies
+*/
+void bodyForce(Body * p, float dt, int n) {
+    int i, j;
+    double Fx, Fy, Fz, dx, dy, dz, distSqr, invDist, invDist3;
 
-        const float ix = p[i].x;
-        const float iy = p[i].y;
-        const float iz = p[i].z;
+    for (i = 0; i < n; i++) {
+	    Fx = 0.0f;
+    	Fy = 0.0f;
+    	Fz = 0.0f;
 
-        #pragma omp simd reduction(+:Fx,Fy,Fz)
-        for (int j = 0; j < n; j++) {
-            float dx = p[j].x - ix;
-            float dy = p[j].y - iy;
-            float dz = p[j].z - iz;
-
-            float distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
-            float invDist  = 1.0f / sqrtf(distSqr);
-            float invDist3 = invDist * invDist * invDist;
+    	for (j = 0; j < n; j++) {
+	        dx = p[j].x - p[i].x;
+            dy = p[j].y - p[i].y;
+            dz = p[j].z - p[i].z;
+            distSqr = dx * dx + dy * dy + dz * dz + SOFTENING;
+            invDist = 1.0f / sqrtf(distSqr);
+            invDist3 = invDist * invDist * invDist;
 
             Fx += dx * invDist3;
             Fy += dy * invDist3;
@@ -45,84 +43,98 @@ void bodyForce(Body * restrict p, float dt, int n)
     }
 }
 
-void integrate(Body * restrict p, float dt, int n)
-{
-    #pragma omp for schedule(static)
-    for (int i = 0; i < n; i++) {
-        p[i].x += p[i].vx * dt;
+/* Integrate positions.
+    - array of bodies
+    - time step
+    - number of bodies
+*/
+void integrate(Body * p, float dt, int n) {
+    int i;
+    
+    for (i = 0; i < n; i++) {
+	    p[i].x += p[i].vx * dt;
         p[i].y += p[i].vy * dt;
         p[i].z += p[i].vz * dt;
     }
 }
 
-int main(int argc, const char *argv[])
-{
-    int num_systems = 32;
-    int bodies_per_system = 8192;
-    int nIters = 400;
+int main(const int argc, const char *argv[]) {
+    /* Default Configuration */
+    int num_systems = 32;       	/* Number of independent galaxies */
+    int bodies_per_system = 8192;	/* Number of bodies per galaxy */
+    int nIters = 20;            	/* Simulation steps */ 
+    
     const float dt = 0.01f;
-
     FILE *fp;
-    Body *data;
+    int total_bodies, bytes, sys, iter;
+    Body *data, *system_ptr;
     float *buf;
-    int total_bodies;
-    double totalTime;
+    double totalTime, interactions_per_system, total_interactions;
 
+
+    /* Attempt to load dataset */
     fp = fopen("galaxy_data.bin", "rb");
     if (fp) {
-        fread(&num_systems, sizeof(int), 1, fp);
-        fread(&bodies_per_system, sizeof(int), 1, fp);
-        printf("Found dataset: %d systems of %d bodies.\n",
-               num_systems, bodies_per_system);
+	    fread(&num_systems, sizeof(int), 1, fp);
+	    fread(&bodies_per_system, sizeof(int), 1, fp);
+	    printf("Found dataset: %d systems of %d bodies.\n", num_systems,
+	            bodies_per_system);
     } else {
-        printf("No dataset found. Using random initialization.\n");
+	    printf("No dataset found. Using random initialization.\n");
     }
 
+    /* Allocate memory for ALL systems */
     total_bodies = num_systems * bodies_per_system;
-    data = aligned_alloc(64, total_bodies * sizeof(Body));
+    bytes = total_bodies * sizeof(Body);
+    data = (Body *) malloc(bytes);
 
+    /* Initialize data */
     if (fp) {
-        fread(data, sizeof(Body), total_bodies, fp);
-        fclose(fp);
+	    fread(data, sizeof(Body), total_bodies, fp);
+	    fclose(fp);
     } else {
-        buf = (float *) data;
-        for (int i = 0; i < 6 * total_bodies; i++)
-            buf[i] = 2.0f * (rand() / (float) RAND_MAX) - 1.0f;
+	/* Random initialization if file missing */
+	    buf = (float *) data;
+	    for (int i = 0; i < 6 * total_bodies; i++) {
+	        buf[i] = 2.0f * (rand() / (float) RAND_MAX) - 1.0f;
+        }
     }
 
-    printf("Running optimized OpenMP CPU simulation...\n");
+    printf("Running sequential CPU simulation for %d systems...\n",
+           num_systems);
 
-    omp_set_nested(0);
-    omp_set_dynamic(0);
+    totalTime = 0.0;
 
     StartTimer();
 
-    // #pragma omp parallel
-    // {
-        for (int iter = 0; iter < nIters; iter++) {
-            #pragma omp parallel for schedule(static)
-            for (int sys = 0; sys < num_systems; sys++) {
-                Body *system_ptr = &data[sys * bodies_per_system];
-
-                bodyForce(system_ptr, dt, bodies_per_system);
-                integrate(system_ptr, dt, bodies_per_system);
-            }
+    /* Time-steps */
+    for (iter = 1; iter <= nIters; iter++) {
+	    /* Galaxies */
+	    for (sys = 0; sys < num_systems; sys++) {
+	        /* Calculate offset for the galaxy */
+	        system_ptr = &data[sys * bodies_per_system];
+	        
+	        /* Compute forces & integrate for the galaxy */
+	        bodyForce(system_ptr, dt, bodies_per_system);
+	        integrate(system_ptr, dt, bodies_per_system);
         }
-    // }
+    }
 
     totalTime = GetTimer() / 1000.0;
 
-    double interactions =
-        (double)bodies_per_system *
-        (double)bodies_per_system *
-        (double)num_systems *
-        (double)nIters;
+    /* Metrics calculation */
+    interactions_per_system = (double) bodies_per_system * bodies_per_system;
+    total_interactions = interactions_per_system * num_systems * nIters;
 
     printf("Total Time: %.3f seconds\n", totalTime);
-    printf("Throughput: %.3f Billion Interactions / second\n", 1e-9 * interactions / totalTime);
+    printf("Average Throughput: %0.3f Billion Interactions / second\n",
+           1e-9 * total_interactions / totalTime);
 
-    printf("Final position [0][0]: %.4f %.4f %.4f\n", data[0].x, data[0].y, data[0].z);
-    printf("Final position of System 0, Body 1: %.4f, %.4f, %.4f\n", data[1].x, data[1].y, data[1].z);
+    /* Dump final state of System 0, Body 0 and 1 for verification comparison */
+    printf("Final position of System 0, Body 0: %.4f, %.4f, %.4f\n",
+           data[0].x, data[0].y, data[0].z);
+    printf("Final position of System 0, Body 1: %.4f, %.4f, %.4f\n",
+           data[1].x, data[1].y, data[1].z);
 
     free(data);
     return 0;

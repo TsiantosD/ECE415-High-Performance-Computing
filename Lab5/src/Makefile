@@ -1,50 +1,62 @@
-# --- Configuration Variables ---
+# ================== COMPILERS ==================
 
-# Compiler to use
 CC = gcc
 
-# Standard compilation flags:
-# -Wall: Enable all standard warnings
-# -Wextra: Enable extra warnings (highly recommended)
-# -std=c99 or -std=gnu99: Use the C99 standard (or GNU extension)
-# -O3: Aggressive optimization level
-# -fopenmp: Enable OpenMP support
-# -lm: Link the math library (for sqrtf)
-# Note: Since the timer code is platform-dependent, ensure you are compiling on the
-# intended platform (e.g., Linux/Unix or Windows).
-CFLAGS = -Wall -O3 -march=native -ffast-math -fopenmp -lm
+# ================== FLAGS ==================
 
-# List of source files. ONLY nbody.c is a source file now, as the timer implementation is
-# included directly via the timer.h header file.
-SOURCES = nbody.c
+# Common optimization flags (safe for both)
+COMMON_FLAGS = -Wall -O3 -march=native -ffast-math
 
-# List of object files (derived from sources)
-OBJECTS = $(SOURCES:.c=.o)
+# OpenMP flags (ONLY for parallel build)
+OMP_FLAGS = -fopenmp
 
-# Name of the final executable
-EXECUTABLE = nbody_omp
+# Math library
+LIBS = -lm
 
-# --- Targets ---
+# ================== SOURCES ==================
 
-# Default target: builds the executable
-all: $(EXECUTABLE)
+OMP_SRC = nbody_omp.c
+SEQ_SRC = nbody.c
 
-# Rule to link the final executable
-# This only needs to link the nbody.o file.
-$(EXECUTABLE): $(OBJECTS)
-	$(CC) $(CFLAGS) $(OBJECTS) -o $@
+OMP_OBJ = $(OMP_SRC:.c=.o)
+SEQ_OBJ = $(SEQ_SRC:.c=.o)
 
-# Rule to compile C source files into object files
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# ================== EXECUTABLES ==================
 
-# Target to run the program with a default number of bodies/systems
-run: $(EXECUTABLE)
-	./$(EXECUTABLE)
+OMP_EXE = omp_nbody
+SEQ_EXE = seq_nbody
 
-# Target to clean up generated files
+# ================== DEFAULT ==================
+
+all: $(OMP_EXE) $(SEQ_EXE)
+
+# ================== OPENMP BUILD ==================
+
+$(OMP_EXE): $(OMP_OBJ)
+	$(CC) $(COMMON_FLAGS) $(OMP_FLAGS) $^ $(LIBS) -o $@
+
+$(OMP_OBJ): $(OMP_SRC)
+	$(CC) $(COMMON_FLAGS) $(OMP_FLAGS) -c $< -o $@
+
+# ================== SEQUENTIAL BUILD ==================
+
+$(SEQ_EXE): $(SEQ_OBJ)
+	$(CC) $(COMMON_FLAGS) $^ $(LIBS) -o $@
+
+$(SEQ_OBJ): $(SEQ_SRC)
+	$(CC) $(COMMON_FLAGS) -c $< -o $@
+
+# ================== RUN TARGETS ==================
+
+run-omp: $(OMP_EXE)
+	./$(OMP_EXE)
+
+run-seq: $(SEQ_EXE)
+	./$(SEQ_EXE)
+
+# ================== CLEAN ==================
+
 clean:
-	rm -f $(EXECUTABLE) $(OBJECTS)
+	rm -f $(OMP_EXE) $(SEQ_EXE) $(OMP_OBJ) $(SEQ_OBJ)
 
-# Prevent make from confusing targets with file names
-.PHONY: all run clean
+.PHONY: all run-omp run-seq clean
