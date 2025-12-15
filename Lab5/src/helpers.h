@@ -2,6 +2,12 @@
 #define HELPERS_H
 #include <time.h> 
 
+static inline double now_sec(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
+
 #define CUDA_CHECK_LAST_ERROR()                                              \
     do {                                                                     \
         cudaDeviceSynchronize();                                             \
@@ -37,12 +43,28 @@
     printf("\rIter: %d/%d done", (iter), (total)); \
     fflush(stdout);
 
-#define PRINT_PROGRESS_RATE(iter, total, start_clock) \
-    do { \
-        double elapsed_sec = (double)(clock() - (start_clock)) / CLOCKS_PER_SEC; \
-        double rate = (elapsed_sec > 0) ? (double)(iter) / elapsed_sec : 0.0; \
-        printf("\rIter: %d/%d | Rate: %.2f iters/s", (iter), (total), rate); \
-        fflush(stdout); \
+#define PRINT_PROGRESS_RATE(iter, total)                          \
+    do {                                                          \
+        static double __last_time = 0.0;                          \
+        static int __last_iter = 0;                               \
+        double _t = now_sec();                                    \
+                                                                  \
+        if (__last_time == 0.0) {                                 \
+            __last_time = _t;                                     \
+            __last_iter = (iter);                                 \
+        }                                                         \
+                                                                  \
+        double __dt = _t - __last_time;                           \
+        int __di = (iter) - __last_iter;                          \
+        double __rate = (__dt > 0.0) ? __di / __dt : 0.0;         \
+        double __pct = 100.0 * (iter) / (total);                  \
+                                                                  \
+        printf("\r%6.2f%% | %d/%d | %.2f it/s",                   \
+               __pct, (iter), (total), __rate);                   \
+        fflush(stdout);                                           \
+                                                                  \
+        __last_time = _t;                                         \
+        __last_iter = (iter);                                     \
     } while(0)
 
 #endif

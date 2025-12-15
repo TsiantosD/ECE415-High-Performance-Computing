@@ -3,8 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
+#include <time.h>
+#include "helpers.h"
 #include "timer.h"
 
+#define OMP_SCHEDULE_TYPE static
 #define SOFTENING 0.01f
 
 typedef struct {
@@ -14,7 +17,7 @@ typedef struct {
 //! setting all to dynamic creates error compared to cpu but is 3x faster
 
 void bodyForce(Body * p, float dt, int n) {
-    #pragma omp for schedule(static)
+    #pragma omp for schedule(OMP_SCHEDULE_TYPE)
     for (int i = 0; i < n; i++) {
         Body *elementPtr = &(p[i]);
 	    float Fx = 0.0f;
@@ -43,7 +46,7 @@ void bodyForce(Body * p, float dt, int n) {
 }
 
 void integrate(Body *p, float dt, int n) {    
-    #pragma omp for schedule(static)
+    #pragma omp for schedule(OMP_SCHEDULE_TYPE)
     for (int i = 0; i < n; i++) {
         Body *elementPtr = &(p[i]);
 
@@ -109,10 +112,11 @@ int main(int argc, const char *argv[])
     StartTimer();
 
     for (int iter = 0; iter < nIters; iter++) {
-        #pragma omp parallel for schedule(static)
+
+        PRINT_PROGRESS_RATE(iter, nIters);
+        #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE)
         for (int sys = 0; sys < num_systems; sys++) {
             Body *system_ptr = &data[sys * bodies_per_system];
-            //OMP_PRINT_NUM_THREADS("Master Loop", sys == 0);
 
             bodyForce(system_ptr, dt, bodies_per_system);
             integrate(system_ptr, dt, bodies_per_system);
@@ -125,7 +129,7 @@ int main(int argc, const char *argv[])
     double interactions_per_system = (double) bodies_per_system * bodies_per_system;
     double total_interactions = interactions_per_system * num_systems * nIters;
 
-    printf("Total Time: %.3f seconds\n", totalTime);
+    printf("\nTotal Time: %.3f seconds\n", totalTime);
     printf("Average Throughput: %0.3f Billion Interactions / second\n",
            1e-9 * total_interactions / totalTime);
 

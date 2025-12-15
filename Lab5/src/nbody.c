@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include "helpers.h"
 #include "timer.h"
 
 #define SOFTENING 0.01f
@@ -106,15 +108,13 @@ int main(const int argc, const char *argv[]) {
     totalTime = 0.0;
 
     StartTimer();
-
-    /* Time-steps */
+    
     for (iter = 1; iter <= nIters; iter++) {
-	    /* Galaxies */
-	    for (sys = 0; sys < num_systems; sys++) {
-	        /* Calculate offset for the galaxy */
+
+        PRINT_PROGRESS_RATE(iter, nIters);
+        for (sys = 0; sys < num_systems; sys++) {
 	        system_ptr = &data[sys * bodies_per_system];
 	        
-	        /* Compute forces & integrate for the galaxy */
 	        bodyForce(system_ptr, dt, bodies_per_system);
 	        integrate(system_ptr, dt, bodies_per_system);
         }
@@ -126,7 +126,7 @@ int main(const int argc, const char *argv[]) {
     interactions_per_system = (double) bodies_per_system * bodies_per_system;
     total_interactions = interactions_per_system * num_systems * nIters;
 
-    printf("Total Time: %.3f seconds\n", totalTime);
+    printf("\nTotal Time: %.3f seconds\n", totalTime);
     printf("Average Throughput: %0.3f Billion Interactions / second\n",
            1e-9 * total_interactions / totalTime);
 
