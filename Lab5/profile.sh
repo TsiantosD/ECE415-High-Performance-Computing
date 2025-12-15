@@ -55,9 +55,9 @@ if [ $? -eq 0 ] && [ "$OPEN_GUI" = true ] && [ -f "$FULL_FILE" ]; then
     
     # Check which GUI command is available (prefer nsys-ui)
     if command -v nsys-ui &> /dev/null; then
-        nsys-ui "$FULL_FILE"
+        nsys-ui "$FULL_FILE" #! Note: Setting to background & does some weird stuff
     elif command -v nsight-sys &> /dev/null; then
-        nsight-sys "$FULL_FILE"
+        nsight-sys "$FULL_FILE" #! Note: Setting to background & does some weird stuff
     else
         echo "Error: Could not find 'nsys-ui' or 'nsight-sys' in PATH."
     fi

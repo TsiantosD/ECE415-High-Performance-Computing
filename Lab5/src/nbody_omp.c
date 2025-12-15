@@ -4,58 +4,52 @@
 #include <string.h>
 #include <omp.h>
 #include "timer.h"
-#include "helpers.h"
 
 #define SOFTENING 0.01f
 
 typedef struct {
-    float x, y, z;
-    float vx, vy, vz;
+    float x, y, z, vx, vy, vz;
 } Body;
 
-void bodyForce(Body * restrict p, float dt, int n)
-{
-    #pragma omp for schedule(dynamic)
-    for (int i = 0; i < n; i++) {
-        float Fx = 0.0f;
-        float Fy = 0.0f;
-        float Fz = 0.0f;
-        //OMP_PRINT_NUM_THREADS("Master Force", i == 0);
+//! setting all to dynamic creates error compared to cpu but is 3x faster
 
-        const float ix = p[i].x;
-        const float iy = p[i].y;
-        const float iz = p[i].z;
+void bodyForce(Body * p, float dt, int n) {
+    #pragma omp for schedule(static)
+    for (int i = 0; i < n; i++) {
+        Body *elementPtr = &(p[i]);
+	    float Fx = 0.0f;
+    	float Fy = 0.0f;
+    	float Fz = 0.0f;
 
         #pragma omp simd reduction(+:Fx,Fy,Fz)
-        for (int j = 0; j < n; j++) {
-            float dx = p[j].x - ix;
-            float dy = p[j].y - iy;
-            float dz = p[j].z - iz;
-            //OMP_PRINT_NUM_THREADS("Slave Force", j == 0 && i == 0);
-
-            float distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
-            float invDist  = 1.0f / sqrtf(distSqr);
-            float invDist3 = invDist * invDist * invDist;
+    	for (int j = 0; j < n; j++) {
+            Body *elementPtrJ = &(p[j]);
+	        const float dx = elementPtrJ->x - elementPtr->x;
+            const float dy = elementPtrJ->y - elementPtr->y;
+            const float dz = elementPtrJ->z - elementPtr->z;
+            const float distSqr = dx * dx + dy * dy + dz * dz + SOFTENING;
+            const float invDist = 1.0f / sqrtf(distSqr);
+            const float invDist3 = invDist * invDist * invDist;
 
             Fx += dx * invDist3;
             Fy += dy * invDist3;
             Fz += dz * invDist3;
         }
 
-        p[i].vx += dt * Fx;
-        p[i].vy += dt * Fy;
-        p[i].vz += dt * Fz;
+        elementPtr->vx += dt * Fx;
+        elementPtr->vy += dt * Fy;
+        elementPtr->vz += dt * Fz;
     }
 }
 
-void integrate(Body * restrict p, float dt, int n)
-{
-    #pragma omp for schedule(dynamic)
+void integrate(Body *p, float dt, int n) {    
+    #pragma omp for schedule(static)
     for (int i = 0; i < n; i++) {
-        //OMP_PRINT_NUM_THREADS("Intergrate Loop", i == 0);
-        p[i].x += p[i].vx * dt;
-        p[i].y += p[i].vy * dt;
-        p[i].z += p[i].vz * dt;
+        Body *elementPtr = &(p[i]);
+
+	    elementPtr->x += elementPtr->vx * dt;
+        elementPtr->y += elementPtr->vy * dt;
+        elementPtr->z += elementPtr->vz * dt;
     }
 }
 
@@ -63,7 +57,7 @@ int main(int argc, const char *argv[])
 {
     int num_systems = 32;
     int bodies_per_system = 8192;
-    const int nIters = 400;
+    const int nIters = 20;
     const float dt = 0.01f;
 
     FILE *fp;
@@ -115,7 +109,7 @@ int main(int argc, const char *argv[])
     StartTimer();
 
     for (int iter = 0; iter < nIters; iter++) {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for (int sys = 0; sys < num_systems; sys++) {
             Body *system_ptr = &data[sys * bodies_per_system];
             //OMP_PRINT_NUM_THREADS("Master Loop", sys == 0);

@@ -1,5 +1,6 @@
 #ifndef HELPERS_H
 #define HELPERS_H
+#include <time.h> 
 
 #define CUDA_CHECK_LAST_ERROR()                                              \
     do {                                                                     \
@@ -32,5 +33,16 @@
     } while (0)
 
 
+#define PRINT_PROGRESS(iter, total) \
+    printf("\rIter: %d/%d done", (iter), (total)); \
+    fflush(stdout);
+
+#define PRINT_PROGRESS_RATE(iter, total, start_clock) \
+    do { \
+        double elapsed_sec = (double)(clock() - (start_clock)) / CLOCKS_PER_SEC; \
+        double rate = (elapsed_sec > 0) ? (double)(iter) / elapsed_sec : 0.0; \
+        printf("\rIter: %d/%d | Rate: %.2f iters/s", (iter), (total), rate); \
+        fflush(stdout); \
+    } while(0)
 
 #endif
