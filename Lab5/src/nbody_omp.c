@@ -7,29 +7,36 @@
 #include "helpers.h"
 #include "timer.h"
 
-#define OMP_SCHEDULE_TYPE static
+#define OMP_SCHEDULE_TYPE dynamic
 #define SOFTENING 0.01f
+
+volatile int counter = 0; 
 
 typedef struct {
     float x, y, z, vx, vy, vz;
 } Body;
 
-//! setting all to dynamic creates error compared to cpu but is 3x faster
+typedef struct {
+    float *restrict x, *restrict y, *restrict z;
+    float *restrict vx, *restrict vy, *restrict vz;
+} GalaxySoA;
 
-void bodyForce(Body * p, float dt, int n) {
-    #pragma omp for schedule(OMP_SCHEDULE_TYPE)
+void bodyForce(GalaxySoA *p, float dt, int n) {
+    #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE) 
     for (int i = 0; i < n; i++) {
-        Body *elementPtr = &(p[i]);
-	    float Fx = 0.0f;
-    	float Fy = 0.0f;
-    	float Fz = 0.0f;
-
+        float Fx = 0.0f;
+        float Fy = 0.0f;
+        float Fz = 0.0f;
+        
+        const float xi = p->x[i];
+        const float yi = p->y[i];
+        const float zi = p->z[i];
+        
         #pragma omp simd reduction(+:Fx,Fy,Fz)
-    	for (int j = 0; j < n; j++) {
-            Body *elementPtrJ = &(p[j]);
-	        const float dx = elementPtrJ->x - elementPtr->x;
-            const float dy = elementPtrJ->y - elementPtr->y;
-            const float dz = elementPtrJ->z - elementPtr->z;
+        for (int j = 0; j < n; j++) {
+            const float dx = p->x[j] - xi;
+            const float dy = p->y[j] - yi;
+            const float dz = p->z[j] - zi;
             const float distSqr = dx * dx + dy * dy + dz * dz + SOFTENING;
             const float invDist = 1.0f / sqrtf(distSqr);
             const float invDist3 = invDist * invDist * invDist;
@@ -39,20 +46,18 @@ void bodyForce(Body * p, float dt, int n) {
             Fz += dz * invDist3;
         }
 
-        elementPtr->vx += dt * Fx;
-        elementPtr->vy += dt * Fy;
-        elementPtr->vz += dt * Fz;
+        p->vx[i] += dt * Fx;
+        p->vy[i] += dt * Fy;
+        p->vz[i] += dt * Fz;
     }
 }
 
-void integrate(Body *p, float dt, int n) {    
-    #pragma omp for schedule(OMP_SCHEDULE_TYPE)
+void integrate(GalaxySoA *p, float dt, int n) {    
+    #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE) 
     for (int i = 0; i < n; i++) {
-        Body *elementPtr = &(p[i]);
-
-	    elementPtr->x += elementPtr->vx * dt;
-        elementPtr->y += elementPtr->vy * dt;
-        elementPtr->z += elementPtr->vz * dt;
+        p->x[i] += p->vx[i] * dt;
+        p->y[i] += p->vy[i] * dt;
+        p->z[i] += p->vz[i] * dt;
     }
 }
 
@@ -104,28 +109,46 @@ int main(int argc, const char *argv[])
             buf[i] = 2.0f * (rand() / (float) RAND_MAX) - 1.0f;
     }
 
+    GalaxySoA *systems = malloc(num_systems * sizeof(GalaxySoA));
+
+    for (int s = 0; s < num_systems; s++) {
+        systems[s].x = aligned_alloc(64, bodies_per_system * sizeof(float));
+        systems[s].y = aligned_alloc(64, bodies_per_system * sizeof(float));
+        systems[s].z = aligned_alloc(64, bodies_per_system * sizeof(float));
+        systems[s].vx = aligned_alloc(64, bodies_per_system * sizeof(float));
+        systems[s].vy = aligned_alloc(64, bodies_per_system * sizeof(float));
+        systems[s].vz = aligned_alloc(64, bodies_per_system * sizeof(float));
+
+        for (int i = 0; i < bodies_per_system; i++) {
+            int idx = s * bodies_per_system + i;
+            systems[s].x[i] = data[idx].x;
+            systems[s].y[i] = data[idx].y;
+            systems[s].z[i] = data[idx].z;
+            systems[s].vx[i] = data[idx].vx;
+            systems[s].vy[i] = data[idx].vy;
+            systems[s].vz[i] = data[idx].vz;
+        }
+    }
+
     printf("Running optimized OpenMP CPU simulation...\n");
 
-    omp_set_nested(1);
+    omp_set_nested(0);
     omp_set_dynamic(0);
 
     StartTimer();
 
     for (int iter = 0; iter < nIters; iter++) {
-
+        
         PRINT_PROGRESS_RATE(iter, nIters);
-        #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE)
-        for (int sys = 0; sys < num_systems; sys++) {
-            Body *system_ptr = &data[sys * bodies_per_system];
 
-            bodyForce(system_ptr, dt, bodies_per_system);
-            integrate(system_ptr, dt, bodies_per_system);
+        for (int sys = 0; sys < num_systems; sys++) {
+            bodyForce(&systems[sys], dt, bodies_per_system);
+            integrate(&systems[sys], dt, bodies_per_system);
         }
     }
 
     totalTime = GetTimer() / 1000.0;
 
-    /* Metrics calculation */
     double interactions_per_system = (double) bodies_per_system * bodies_per_system;
     double total_interactions = interactions_per_system * num_systems * nIters;
 
@@ -133,12 +156,20 @@ int main(int argc, const char *argv[])
     printf("Average Throughput: %0.3f Billion Interactions / second\n",
            1e-9 * total_interactions / totalTime);
 
-    /* Dump final state of System 0, Body 0 and 1 for verification comparison */
     printf("Final position of System 0, Body 0: %.4f, %.4f, %.4f\n",
-           data[0].x, data[0].y, data[0].z);
+           systems[0].x[0], systems[0].y[0], systems[0].z[0]);
     printf("Final position of System 0, Body 1: %.4f, %.4f, %.4f\n",
-           data[1].x, data[1].y, data[1].z);
+           systems[0].x[1], systems[0].y[1], systems[0].z[1]);
 
     free(data);
+    for (int s = 0; s < num_systems; s++) {
+        free(systems[s].x);
+        free(systems[s].y);
+        free(systems[s].z);
+        free(systems[s].vx);
+        free(systems[s].vy);
+        free(systems[s].vz);
+    }
+    free(systems);
     return 0;
 }

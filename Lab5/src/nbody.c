@@ -44,7 +44,7 @@ void bodyForce(Body * p, float dt, int n) {
         p[i].vz += dt * Fz;
     }
 }
-
+int counter = 0;
 /* Integrate positions.
     - array of bodies
     - time step
@@ -54,6 +54,7 @@ void integrate(Body * p, float dt, int n) {
     int i;
     
     for (i = 0; i < n; i++) {
+        counter++;
 	    p[i].x += p[i].vx * dt;
         p[i].y += p[i].vy * dt;
         p[i].z += p[i].vz * dt;
@@ -135,7 +136,7 @@ int main(const int argc, const char *argv[]) {
            data[0].x, data[0].y, data[0].z);
     printf("Final position of System 0, Body 1: %.4f, %.4f, %.4f\n",
            data[1].x, data[1].y, data[1].z);
-
+    printf("%d\n",counter);
     free(data);
     return 0;
 }

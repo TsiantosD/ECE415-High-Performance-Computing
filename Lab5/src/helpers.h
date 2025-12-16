@@ -2,11 +2,24 @@
 #define HELPERS_H
 #include <time.h> 
 
+//! These macros are meant to be used instead of writing testing code
+//! easier to use and spot/remove when refactoring final version
+
 static inline double now_sec(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec + ts.tv_nsec * 1e-9;
 }
+
+#define ATOMIC_INCREMENT_COUNTER(counter) \
+    _Pragma("omp atomic")                  \
+    (counter)++
+
+#define PRINT_COUNTER(counter, msg)             \
+    do {                                        \
+        printf("%s: %d\n", (msg), (counter));   \
+        fflush(stdout);                         \
+    } while(0)
 
 #define CUDA_CHECK_LAST_ERROR()                                              \
     do {                                                                     \
@@ -22,20 +35,22 @@ static inline double now_sec(void) {
 
 #define OMP_PRINT(msg) \
     do { \
-        int _tid = omp_get_thread_num(); \
-        printf("Thread #%d: %s\n", _tid, (msg)); \
+        int _tid = omp_get_thread_num();            \
+        printf("Thread #%d: %s\n", _tid, (msg));    \
+        fflush(stdout);                             \
     } while (0)
 
 
-/* Usage: OMP_PRINT_NUM_THREADS("message", 1); */
-#define OMP_PRINT_NUM_THREADS(msg, enable)             \
-    do {                                               \
-        if (enable) {                                  \
-            if (omp_get_thread_num() == 0) {           \
-                printf("Using %d threads: %s\n",       \
-                       omp_get_num_threads(), (msg));  \
-            }                                          \
-        }                                              \
+#define OMP_PRINT_NUM_THREADS(msg, enable, threadSelExpr)\
+    do {                                                 \
+        if (enable) {                                    \
+            int __tid = omp_get_thread_num();            \
+            if (__tid == threadSelExpr) {                \
+                printf("[%d] Using %d threads: %s\n",    \
+                __tid, omp_get_num_threads(), (msg));    \
+                fflush(stdout);                          \
+            }                                            \
+        }                                                \
     } while (0)
 
 
