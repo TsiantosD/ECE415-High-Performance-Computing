@@ -22,7 +22,6 @@ typedef struct {
 } GalaxySoA;
 
 void bodyForce(GalaxySoA *p, float dt, int n) {
-    #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE) 
     for (int i = 0; i < n; i++) {
         float Fx = 0.0f;
         float Fy = 0.0f;
@@ -53,7 +52,6 @@ void bodyForce(GalaxySoA *p, float dt, int n) {
 }
 
 void integrate(GalaxySoA *p, float dt, int n) {    
-    #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE) 
     for (int i = 0; i < n; i++) {
         p->x[i] += p->vx[i] * dt;
         p->y[i] += p->vy[i] * dt;
@@ -136,11 +134,11 @@ int main(int argc, const char *argv[])
     omp_set_dynamic(0);
 
     StartTimer();
-
+    
     for (int iter = 0; iter < nIters; iter++) {
         
         PRINT_PROGRESS_RATE(iter, nIters);
-
+        #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE) 
         for (int sys = 0; sys < num_systems; sys++) {
             bodyForce(&systems[sys], dt, bodies_per_system);
             integrate(&systems[sys], dt, bodies_per_system);
