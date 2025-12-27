@@ -11,7 +11,7 @@
 //! Upper limit
 #define NUM_GPU 8
 #define SOFTENING 0.01f
-#define BLOCK_SIZE 256
+#define BLOCK_SIZE 32   //TODO think why this <<< better (more computes/thread better?)
 
 typedef struct {
     float x, y, z, vx, vy, vz;
