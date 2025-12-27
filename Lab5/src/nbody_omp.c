@@ -48,11 +48,6 @@ void bodyForce(GalaxySoA *p, float dt, int n) {
         p->vx[i] += dt * Fx;
         p->vy[i] += dt * Fy;
         p->vz[i] += dt * Fz;
-    }
-}
-
-void integrate(GalaxySoA *p, float dt, int n) {    
-    for (int i = 0; i < n; i++) {
         p->x[i] += p->vx[i] * dt;
         p->y[i] += p->vy[i] * dt;
         p->z[i] += p->vz[i] * dt;
@@ -88,7 +83,7 @@ int main(int argc, const char *argv[])
     }
 
     total_bodies = num_systems * bodies_per_system;
-    data = aligned_alloc(64, total_bodies * sizeof(Body));
+    data = malloc(total_bodies * sizeof(Body));
 
     if (fp) {
         size_t nread = fread(data, sizeof(Body), (size_t)total_bodies, fp);
@@ -110,12 +105,12 @@ int main(int argc, const char *argv[])
     GalaxySoA *systems = malloc(num_systems * sizeof(GalaxySoA));
 
     for (int s = 0; s < num_systems; s++) {
-        systems[s].x = aligned_alloc(64, bodies_per_system * sizeof(float));
-        systems[s].y = aligned_alloc(64, bodies_per_system * sizeof(float));
-        systems[s].z = aligned_alloc(64, bodies_per_system * sizeof(float));
-        systems[s].vx = aligned_alloc(64, bodies_per_system * sizeof(float));
-        systems[s].vy = aligned_alloc(64, bodies_per_system * sizeof(float));
-        systems[s].vz = aligned_alloc(64, bodies_per_system * sizeof(float));
+        systems[s].x = malloc(bodies_per_system * sizeof(float));
+        systems[s].y = malloc(bodies_per_system * sizeof(float));
+        systems[s].z = malloc(bodies_per_system * sizeof(float));
+        systems[s].vx = malloc(bodies_per_system * sizeof(float));
+        systems[s].vy = malloc(bodies_per_system * sizeof(float));
+        systems[s].vz = malloc(bodies_per_system * sizeof(float));
 
         for (int i = 0; i < bodies_per_system; i++) {
             int idx = s * bodies_per_system + i;
@@ -136,12 +131,10 @@ int main(int argc, const char *argv[])
     StartTimer();
     
     for (int iter = 0; iter < nIters; iter++) {
-        
-        PRINT_PROGRESS_RATE(iter, nIters);
+        //PRINT_PROGRESS_RATE(iter, nIters);
         #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE) 
         for (int sys = 0; sys < num_systems; sys++) {
             bodyForce(&systems[sys], dt, bodies_per_system);
-            integrate(&systems[sys], dt, bodies_per_system);
         }
     }
 
