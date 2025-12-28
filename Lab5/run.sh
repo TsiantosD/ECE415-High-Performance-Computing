@@ -245,8 +245,9 @@ if [ "$ITERATIONS" -gt 1 ]; then
     mkdir -p "$LOG_DIR"
 fi
 
+echo ""
 echo "Starting Execution..."
-
+echo "--------------------------------------"
 for (( i=1; i<=ITERATIONS; i++ ))
 do
     if [ "$ITERATIONS" -gt 1 ]; then
@@ -256,7 +257,7 @@ do
         ./src/main "$INPUT_PATH" "$OUTPUT_PATH" 
     fi
 done
-
+echo "--------------------------------------"
 echo "Done."
 
 if [ "$ITERATIONS" -gt 1 ]; then

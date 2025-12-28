@@ -79,8 +79,8 @@ int main(const int argc, const char *argv[]) {
            num_systems);
 #endif
     totalTime = run_cpu_simulation(num_systems, bodies_per_system, nIters, dt, cpu_data);
-    printf("\nTotal CPU Time: %.3f seconds\n", totalTime);
-    printf("Average CPU Throughput: %0.3f Billion Interactions / second\n",
+    printf("Total CPU Time: %.3f seconds\n", totalTime);
+    printf("Average CPU Throughput: %0.3f Billion Interactions / second\n\n",
            1e-9 * total_interactions / totalTime);
 #endif
 
@@ -88,8 +88,8 @@ int main(const int argc, const char *argv[]) {
     printf("Running GPU simulation for %d systems...\n",
            num_systems);
     totalTime = run_gpu_simulation(num_systems, bodies_per_system, nIters, dt, gpu_data);
-    printf("\nTotal GPU Time: %.3f seconds\n", totalTime);
-    printf("Average GPU Throughput: %0.3f Billion Interactions / second\n",
+    printf("Total GPU Time: %.3f seconds\n", totalTime);
+    printf("Average GPU Throughput: %0.3f Billion Interactions / second\n\n",
            1e-9 * total_interactions / totalTime);
 #endif
 
@@ -106,7 +106,7 @@ int main(const int argc, const char *argv[]) {
     }
 
     if (!correct)
-        printf("\nGPU data is not correct!\n");
+        printf("GPU data is not correct!\n");
 #endif
 
 #if ONLY_CPU==1
@@ -114,28 +114,28 @@ int main(const int argc, const char *argv[]) {
     if (argc >= 3) {
         fp = fopen(argv[2], "wb");
         if (!fp) {
-            fprintf(stderr, "\nError: failed to open output file %s\n", argv[2]);
+            fprintf(stderr, "Error: failed to open output file %s\n", argv[2]);
             /* Don't return failure here, just print error so we can free memory */
         } else {
             /* Write the header (Systems + Bodies count) to match input format */
             if (fwrite(&num_systems, sizeof(int), 1, fp) != 1 ||
                 fwrite(&bodies_per_system, sizeof(int), 1, fp) != 1) {
-                fprintf(stderr, "\nError: failed to write dataset header to %s\n", argv[2]);
+                fprintf(stderr, "Error: failed to write dataset header to %s\n", argv[2]);
             } else {
                 /* Write the actual body data */
                 size_t nwrite = fwrite(cpu_data, sizeof(Body), (size_t)total_bodies, fp);
                 if (nwrite != (size_t)total_bodies) {
                     fprintf(stderr,
-                            "\nError: expected %d bodies, wrote %zu\n",
+                            "Error: expected %d bodies, wrote %zu\n",
                             total_bodies, nwrite);
                 } else {
-                    printf("\nSuccessfully wrote CPU simulation data to %s\n", argv[2]);
+                    printf("Successfully wrote CPU simulation data to %s\n", argv[2]);
                 }
             }
             fclose(fp);
         }
     } else {
-        printf("\nWarning: WRITE_CPU_OUTPUT enabled but no output file argument provided.\n");
+        printf("Warning: WRITE_CPU_OUTPUT enabled but no output file argument provided.\n");
     }
 #endif
 

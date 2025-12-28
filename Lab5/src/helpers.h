@@ -8,10 +8,18 @@ typedef struct {
     float x, y, z, vx, vy, vz;
 } Body;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 double run_cpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
                             const float dt, Body *data);
 double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
                             const float dt, Body *data);
+
+#ifdef __cplusplus
+}
+#endif
 
 //! These macros are meant to be used instead of writing testing code
 //! easier to use and spot/remove when refactoring final version

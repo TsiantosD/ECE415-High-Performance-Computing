@@ -14,10 +14,10 @@
 #endif
 
 #ifdef WIN32
-double PCFreq = 0.0;
-__int64 timerStart = 0;
+static double PCFreq = 0.0;
+static __int64 timerStart = 0;
 #else
-struct timeval timerStart;
+static struct timeval timerStart;
 #endif
 
 void StartTimer()
