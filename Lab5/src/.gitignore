@@ -1,4 +1,5 @@
 omp_nbody
 seq_nbody
 cuda_nbody
+main
 *.o

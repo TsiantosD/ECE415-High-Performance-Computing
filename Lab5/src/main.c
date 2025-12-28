@@ -2,9 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include "helpers.h"
-#include "timer.h"
 
 #define ACCURACY 0.001
 
@@ -21,8 +19,13 @@ int main(const int argc, const char *argv[]) {
     int total_bodies;
     double totalTime;
 
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <input_file> <output_file>\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
     /* Attempt to load dataset */
-    fp = fopen("galaxy_data.bin", "rb");
+    fp = fopen(argv[1], "rb");
     if (fp) {
         if (fread(&num_systems, sizeof(int), 1, fp) != 1 ||
             fread(&bodies_per_system, sizeof(int), 1, fp) != 1) {
@@ -54,7 +57,7 @@ int main(const int argc, const char *argv[]) {
             free(gpu_data);
             return EXIT_FAILURE;
         }
-       fclose(fp);
+        fclose(fp);
     } else { /* Random initialization if file missing */
         buf = (float *) cpu_data;
         for (int i = 0; i < 6 * total_bodies; i++)
@@ -89,19 +92,19 @@ int main(const int argc, const char *argv[]) {
            1e-9 * total_interactions / totalTime);
 
 #if CHECK_OUTPUT==1
-        int correct = 1;
-        for (int i = 0; i < total_bodies; i++) {
-	    double x_diff = abs(cpu_data[i].x - gpu_data[i].x);
-	    double y_diff = abs(cpu_data[i].y - gpu_data[i].y);
-	    double z_diff = abs(cpu_data[i].z - gpu_data[i].z);
-            if (x_diff > ACCURACY || y_diff > ACCURACY || z_diff > ACCURACY) {
-                correct = 0;
-                break;
-            }
+    int correct = 1;
+    for (int i = 0; i < total_bodies; i++) {
+    double x_diff = fabs(cpu_data[i].x - gpu_data[i].x);
+    double y_diff = fabs(cpu_data[i].y - gpu_data[i].y);
+    double z_diff = fabs(cpu_data[i].z - gpu_data[i].z);
+        if (x_diff > ACCURACY || y_diff > ACCURACY || z_diff > ACCURACY) {
+            correct = 0;
+            break;
         }
+    }
 
-        if (!correct)
-            printf("GPU data is not correct!\n");
+    if (!correct)
+        printf("GPU data is not correct!\n");
 #endif
 
     free(cpu_data);
