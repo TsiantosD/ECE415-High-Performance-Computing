@@ -20,25 +20,56 @@ NVCC_FLAGS = -O3 --use_fast_math -Xcompiler -fopenmp
 # Math library
 LIBS = -lm
 
+# Mode for main target
+CPU_MODE ?= omp
+
+# Add user flags
+COMMON_FLAGS += $(USER_FLAGS)
+NVCC_FLAGS   += $(USER_FLAGS)
+
 # ================== SOURCES ==================
 
 OMP_SRC  = nbody_omp.c
 SEQ_SRC  = nbody.c
-CUDA_SRC = nbody_cuda.cu
+MAIN_SRC  = main.c
+CUDA_SRC ?= nbody_cuda.cu
 
+MAIN_OBJ = $(MAIN_SRC:.c=.o)
 OMP_OBJ  = $(OMP_SRC:.c=.o)
 SEQ_OBJ  = $(SEQ_SRC:.c=.o)
 CUDA_OBJ = $(CUDA_SRC:.cu=.o)
+
+ifeq ($(CPU_MODE), seq)
+    CHOSEN_CPU_SRC = $(SEQ_SRC)
+    CHOSEN_CPU_OBJ = $(CHOSEN_CPU_SRC:.c=.o)
+    CPU_COMPILE_FLAGS = $(COMMON_FLAGS)
+else
+    CHOSEN_CPU_SRC = $(OMP_SRC)
+    CHOSEN_CPU_OBJ = $(CHOSEN_CPU_SRC:.c=.o)
+    CPU_COMPILE_FLAGS = $(COMMON_FLAGS) $(OMP_FLAGS)
+endif
 
 # ================== EXECUTABLES ==================
 
 OMP_EXE  = omp_nbody
 SEQ_EXE  = seq_nbody
 CUDA_EXE = cuda_nbody
+MAIN_EXE = main
 
 # ================== DEFAULT ==================
 
-all: $(OMP_EXE) $(SEQ_EXE) $(CUDA_EXE)
+all: $(MAIN_EXE)
+
+debug: NVCC_FLAGS += --ptxas-options="-v" -g -G -O0
+debug: $(MAIN_EXE)
+
+# ================== MAIN TARGET ==================
+
+$(MAIN_EXE): $(MAIN_OBJ) $(CHOSEN_CPU_OBJ) $(CUDA_OBJ)
+	$(NVCC) $(NVCC_FLAGS) $^ $(LIBS) -o $@
+
+$(MAIN_OBJ): $(MAIN_SRC)
+	$(CC) $(COMMON_FLAGS) -c $< -o $@
 
 # ================== OPENMP BUILD ==================
 
@@ -78,6 +109,6 @@ run-cuda: $(CUDA_EXE)
 # ================== CLEAN ==================
 
 clean:
-	rm -f $(OMP_EXE) $(SEQ_EXE) $(CUDA_EXE) $(OMP_OBJ) $(SEQ_OBJ) $(CUDA_OBJ)
+	rm -f $(OMP_EXE) $(SEQ_EXE) $(CUDA_EXE) $(MAIN_EXE) *.o
 
 .PHONY: all run-omp run-seq run-cuda clean

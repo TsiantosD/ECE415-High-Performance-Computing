@@ -2,6 +2,17 @@
 #define HELPERS_H
 #include <time.h> 
 
+#define SOFTENING 0.01f
+
+typedef struct {
+    float x, y, z, vx, vy, vz;
+} Body;
+
+double run_cpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
+                            const float dt, Body *data);
+double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
+                            const float dt, Body *data);
+
 //! These macros are meant to be used instead of writing testing code
 //! easier to use and spot/remove when refactoring final version
 

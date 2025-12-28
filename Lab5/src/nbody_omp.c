@@ -8,13 +8,6 @@
 #include "timer.h"
 
 #define OMP_SCHEDULE_TYPE dynamic
-#define SOFTENING 0.01f
-
-volatile int counter = 0; 
-
-typedef struct {
-    float x, y, z, vx, vy, vz;
-} Body;
 
 typedef struct {
     float *restrict x, *restrict y, *restrict z;
@@ -61,54 +54,8 @@ void integrate(GalaxySoA *p, float dt, int n) {
     }
 }
 
-int main(int argc, const char *argv[])
-{
-    int num_systems = 32;
-    int bodies_per_system = 8192;
-    const int nIters = 20;
-    const float dt = 0.01f;
-
-    FILE *fp;
-    Body *data;
-    float *buf;
-    int total_bodies;
-    double totalTime;
-
-    fp = fopen("galaxy_data.bin", "rb");
-    if (fp) {
-        if (fread(&num_systems, sizeof(int), 1, fp) != 1 ||
-            fread(&bodies_per_system, sizeof(int), 1, fp) != 1) {
-            fprintf(stderr, "Error: failed to read dataset header\n");
-            fclose(fp);
-            return EXIT_FAILURE;
-        }
-
-       printf("Found dataset: %d systems of %d bodies.\n",
-               num_systems, bodies_per_system);
-    } else {
-        printf("No dataset found. Using random initialization.\n");
-    }
-
-    total_bodies = num_systems * bodies_per_system;
-    data = malloc(total_bodies * sizeof(Body));
-
-    if (fp) {
-        size_t nread = fread(data, sizeof(Body), (size_t)total_bodies, fp);
-        if (nread != (size_t)total_bodies) {
-            fprintf(stderr,
-                    "Error: expected %d bodies, read %zu\n",
-                    total_bodies, nread);
-            fclose(fp);
-            free(data);
-            return EXIT_FAILURE;
-        }
-       fclose(fp);
-    } else {
-        buf = (float *) data;
-        for (int i = 0; i < 6 * total_bodies; i++)
-            buf[i] = 2.0f * (rand() / (float) RAND_MAX) - 1.0f;
-    }
-
+double run_cpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
+                          const float dt, Body *data) {
     GalaxySoA *systems = malloc(num_systems * sizeof(GalaxySoA));
 
     for (int s = 0; s < num_systems; s++) {
@@ -130,8 +77,6 @@ int main(int argc, const char *argv[])
         }
     }
 
-    printf("Running optimized OpenMP CPU simulation...\n");
-
     omp_set_nested(0);
     omp_set_dynamic(0);
 
@@ -146,21 +91,12 @@ int main(int argc, const char *argv[])
         }
     }
 
-    totalTime = GetTimer() / 1000.0;
+    double total_time = GetTimer() / 1000.0f;
 
-    double interactions_per_system = (double) bodies_per_system * bodies_per_system;
-    double total_interactions = interactions_per_system * num_systems * nIters;
+    for (int s = 0; s < num_systems; s++) {
+        // Move data back to data array
+    }
 
-    printf("\nTotal Time: %.3f seconds\n", totalTime);
-    printf("Average Throughput: %0.3f Billion Interactions / second\n",
-           1e-9 * total_interactions / totalTime);
-
-    printf("Final position of System 0, Body 0: %.4f, %.4f, %.4f\n",
-           systems[0].x[0], systems[0].y[0], systems[0].z[0]);
-    printf("Final position of System 0, Body 1: %.4f, %.4f, %.4f\n",
-           systems[0].x[1], systems[0].y[1], systems[0].z[1]);
-
-    free(data);
     for (int s = 0; s < num_systems; s++) {
         free(systems[s].x);
         free(systems[s].y);
@@ -170,5 +106,6 @@ int main(int argc, const char *argv[])
         free(systems[s].vz);
     }
     free(systems);
-    return 0;
+
+    return total_time;
 }
