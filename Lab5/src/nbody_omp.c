@@ -95,6 +95,15 @@ double run_cpu_simulation(const int num_systems, const int bodies_per_system, co
 
     for (int s = 0; s < num_systems; s++) {
         // Move data back to data array
+        for (int i = 0; i < bodies_per_system; i++) {
+            int idx = s * bodies_per_system + i;
+            data[idx].x  = systems[s].x[i];
+            data[idx].y  = systems[s].y[i];
+            data[idx].z  = systems[s].z[i];
+            data[idx].vx = systems[s].vx[i];
+            data[idx].vy = systems[s].vy[i];
+            data[idx].vz = systems[s].vz[i];
+        }
     }
 
     for (int s = 0; s < num_systems; s++) {

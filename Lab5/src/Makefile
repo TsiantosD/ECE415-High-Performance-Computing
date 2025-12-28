@@ -60,7 +60,7 @@ debug: $(MAIN_EXE) $(RESULTS_CHECK_EXE)
 # ================== MAIN TARGET ==================
 
 $(MAIN_EXE): $(MAIN_OBJ) $(CHOSEN_CPU_OBJ) $(CUDA_OBJ)
-	$(NVCC) $(NVCC_FLAGS) $^ -o $@
+	$(CC) $(COMMON_FLAGS) $^ -o $@
 
 $(MAIN_OBJ): $(MAIN_SRC)
 	$(CC) $(COMMON_FLAGS) -c $< -o $@

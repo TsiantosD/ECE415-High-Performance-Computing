@@ -9,20 +9,22 @@ CU_FILE_SELECTED=""
 INPUT_ARG=""
 CPU_MODE="omp"
 DEBUG_MODE=0  # 0 = Release (Default), 1 = Debug
+WRITE_OUTPUT=0
 
 # ==========================================
 # Help / Usage Function
 # ==========================================
 usage() {
-    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i input_name] [-sd]"
+    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i input_name] [-sdw]"
     echo ""
     echo "Flags:"
     echo "  -n: Number of times to run (Default: 1)"
     echo "  -c: Value for CHECK_OUTPUT (Default: 1)"
     echo "  -f: Specific .cu file (e.g., 'clahe.cu') OR a number ('1' for 1st file)"
     echo "  -i: Input filename (e.g., 'galaxy_data.bin'). Checks 'Inputs/'."
-    echo "  -s: Run CPU version in sequential mode."
     echo "  -d: Compile in DEBUG mode (Target: debug). Default is Release."
+    echo "  -s: Run CPU version in sequential mode."
+    echo "  -w: Write final CPU output to file."
     exit 1
 }
 
@@ -30,7 +32,7 @@ usage() {
 # 1. Parse Flags
 # ==========================================
 # Added 'd' to the option string (no colon after d because it takes no argument)
-while getopts "n:c:f:i:sd" opt; do
+while getopts "n:c:f:i:sdw" opt; do
     case $opt in
         n) ITERATIONS=$OPTARG ;;
         c) CHECK_OUTPUT_VAL=$OPTARG ;;
@@ -38,6 +40,7 @@ while getopts "n:c:f:i:sd" opt; do
         i) INPUT_ARG=$OPTARG ;;
         s) CPU_MODE="seq" ;;
         d) DEBUG_MODE=1 ;;
+        w) WRITE_OUTPUT=1 ;;
         *) usage ;;
     esac
 done
@@ -128,6 +131,9 @@ fi
 BASENAME="${INPUT_ARG%.*}"
 # Extract extension (e.g. test.bin -> bin)
 EXTENSION="${INPUT_ARG##*.}"
+OUTPUT_PATH="Outputs/${BASENAME}_out.${EXTENSION}"
+
+mkdir -p Outputs/
 
 # ==========================================
 # 4. Select CUDA File (If not specified)
@@ -204,6 +210,7 @@ echo " Input:         $INPUT_ARG"
 echo " CUDA Kernel:   $CU_FILE_SELECTED"
 echo " Iterations:    $ITERATIONS"
 echo " Check Output:  $CHECK_OUTPUT_VAL"
+echo " Write CPU Output:  $WRITE_OUTPUT"
 echo "========================================"
 echo "Compiling..."
 
@@ -213,9 +220,9 @@ make -C src clean CUDA_SRC="$CU_FILE_SELECTED" > /dev/null
 # Construct Flags
 
 if [ "$DEBUG_MODE" -eq 1 ]; then
-    make -C src debug CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL"
+    make -C src debug CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DWRITE_OUTPUT=$WRITE_OUTPUT"
 else
-    make -C src CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL"
+    make -C src CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DWRITE_OUTPUT=$WRITE_OUTPUT"
 fi
 
 if [ $? -ne 0 ]; then
@@ -244,9 +251,9 @@ for (( i=1; i<=ITERATIONS; i++ ))
 do
     if [ "$ITERATIONS" -gt 1 ]; then
         echo "Run #$i..."
-        ./src/main "$INPUT_PATH" > "$LOG_DIR/run_$i.log"
+        ./src/main "$INPUT_PATH" "$OUTPUT_PATH" > "$LOG_DIR/run_$i.log"
     else
-        ./src/main "$INPUT_PATH"
+        ./src/main "$INPUT_PATH" "$OUTPUT_PATH" 
     fi
 done
 
