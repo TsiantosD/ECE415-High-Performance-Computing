@@ -11,7 +11,7 @@
     - time step
     - number of bodies
 */
-void bodyForce(Body * p, float dt, int n) {
+static void bodyForce(Body * p, float dt, int n) {
     int i, j;
     double Fx, Fy, Fz, dx, dy, dz, distSqr, invDist, invDist3;
 
@@ -44,7 +44,7 @@ int counter = 0;
     - time step
     - number of bodies
 */
-void integrate(Body * p, float dt, int n) {
+static void integrate(Body * p, float dt, int n) {
     int i;
     
     for (i = 0; i < n; i++) {

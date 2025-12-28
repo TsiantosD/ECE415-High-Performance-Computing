@@ -6,19 +6,13 @@ NVCC = nvcc
 # ================== FLAGS ==================
 
 # Common optimization flags for CPU (GCC)
-COMMON_FLAGS = -Wall -O3 -march=native -ffast-math
-
-# OpenMP flags (For parallel CPU build)
-OMP_FLAGS = -fopenmp
+COMMON_FLAGS = -Wall -O3 -fopenmp -ffast-math -lm
 
 # CUDA flags
 # -Xcompiler passes flags to the host compiler (gcc). 
 # We pass -fopenmp so the host side of the CUDA code can spawn threads.
 # --use_fast_math is the CUDA equivalent of -ffast-math
 NVCC_FLAGS = -O3 --use_fast_math -Xcompiler -fopenmp
-
-# Math library
-LIBS = -lm
 
 # Mode for main target
 CPU_MODE ?= omp
@@ -29,12 +23,14 @@ NVCC_FLAGS   += $(USER_FLAGS)
 
 # ================== SOURCES ==================
 
+MAIN_SRC  = main.c
+RESULTS_CHECK_SRC  = results_check.c
 OMP_SRC  = nbody_omp.c
 SEQ_SRC  = nbody.c
-MAIN_SRC  = main.c
 CUDA_SRC ?= nbody_cuda.cu
 
 MAIN_OBJ = $(MAIN_SRC:.c=.o)
+RESULTS_CHECK_OBJ = $(RESULTS_CHECK_SRC:.c=.o)
 OMP_OBJ  = $(OMP_SRC:.c=.o)
 SEQ_OBJ  = $(SEQ_SRC:.c=.o)
 CUDA_OBJ = $(CUDA_SRC:.cu=.o)
@@ -51,64 +47,50 @@ endif
 
 # ================== EXECUTABLES ==================
 
-OMP_EXE  = omp_nbody
-SEQ_EXE  = seq_nbody
-CUDA_EXE = cuda_nbody
 MAIN_EXE = main
+RESULTS_CHECK_EXE = results_check
 
 # ================== DEFAULT ==================
 
-all: $(MAIN_EXE)
+all: $(MAIN_EXE) $(RESULTS_CHECK_EXE)
 
 debug: NVCC_FLAGS += --ptxas-options="-v" -g -G -O0
-debug: $(MAIN_EXE)
+debug: $(MAIN_EXE) $(RESULTS_CHECK_EXE)
 
 # ================== MAIN TARGET ==================
 
 $(MAIN_EXE): $(MAIN_OBJ) $(CHOSEN_CPU_OBJ) $(CUDA_OBJ)
-	$(NVCC) $(NVCC_FLAGS) $^ $(LIBS) -o $@
+	$(NVCC) $(NVCC_FLAGS) $^ -o $@
 
 $(MAIN_OBJ): $(MAIN_SRC)
 	$(CC) $(COMMON_FLAGS) -c $< -o $@
 
+# ================== MAIN_CPU_CHECK TARGET ==================
+
+$(RESULTS_CHECK_EXE): $(RESULTS_CHECK_OBJ)
+	$(CC) $(COMMON_FLAGS) $^ -o $@
+
+$(RESULTS_CHECK_OBJ): $(RESULTS_CHECK_SRC)
+	$(CC) $(COMMON_FLAGS) -c $< -o $@
+
 # ================== OPENMP BUILD ==================
 
-$(OMP_EXE): $(OMP_OBJ)
-	$(CC) $(COMMON_FLAGS) $(OMP_FLAGS) $^ $(LIBS) -o $@
-
 $(OMP_OBJ): $(OMP_SRC)
-	$(CC) $(COMMON_FLAGS) $(OMP_FLAGS) -c $< -o $@
+	$(CC) $(COMMON_FLAGS) -c $< -o $@
 
 # ================== SEQUENTIAL BUILD ==================
-
-$(SEQ_EXE): $(SEQ_OBJ)
-	$(CC) $(COMMON_FLAGS) $^ $(LIBS) -o $@
 
 $(SEQ_OBJ): $(SEQ_SRC)
 	$(CC) $(COMMON_FLAGS) -c $< -o $@
 
 # ================== CUDA BUILD ==================
 
-$(CUDA_EXE): $(CUDA_OBJ)
-	$(NVCC) $(NVCC_FLAGS) $^ $(LIBS) -o $@
-
 $(CUDA_OBJ): $(CUDA_SRC)
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
-
-# ================== RUN TARGETS ==================
-
-run-omp: $(OMP_EXE)
-	./$(OMP_EXE)
-
-run-seq: $(SEQ_EXE)
-	./$(SEQ_EXE)
-
-run-cuda: $(CUDA_EXE)
-	./$(CUDA_EXE)
 
 # ================== CLEAN ==================
 
 clean:
-	rm -f $(OMP_EXE) $(SEQ_EXE) $(CUDA_EXE) $(MAIN_EXE) *.o
+	rm -f $(MAIN_EXE) $(RESULTS_CHECK_EXE) *.o
 
-.PHONY: all run-omp run-seq run-cuda clean
+.PHONY: all clean

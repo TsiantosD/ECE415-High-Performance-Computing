@@ -14,7 +14,7 @@ typedef struct {
     float *restrict vx, *restrict vy, *restrict vz;
 } GalaxySoA;
 
-void bodyForce(GalaxySoA *p, float dt, int n) {
+static void bodyForce(GalaxySoA *p, float dt, int n) {
     for (int i = 0; i < n; i++) {
         float Fx = 0.0f;
         float Fy = 0.0f;
@@ -44,7 +44,7 @@ void bodyForce(GalaxySoA *p, float dt, int n) {
     }
 }
 
-void integrate(GalaxySoA *p, float dt, int n) {
+static void integrate(GalaxySoA *p, float dt, int n) {
     int i;
     
     for (i = 0; i < n; i++) {
