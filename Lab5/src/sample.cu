@@ -53,6 +53,9 @@ __global__ void bodyForceKernel(GalaxySoA device_system, float dt, int n) {
     device_system.vx[i] += dt * Fx;
     device_system.vy[i] += dt * Fy;
     device_system.vz[i] += dt * Fz;
+
+    __syncthreads();
+    
     device_system.x[i] += device_system.vx[i] * dt;
     device_system.y[i] += device_system.vy[i] * dt;
     device_system.z[i] += device_system.vz[i] * dt;

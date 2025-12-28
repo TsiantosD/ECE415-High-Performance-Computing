@@ -48,7 +48,14 @@ void bodyForce(GalaxySoA *p, float dt, int n) {
         p->vx[i] += dt * Fx;
         p->vy[i] += dt * Fy;
         p->vz[i] += dt * Fz;
-        p->x[i] += p->vx[i] * dt;
+    }
+}
+
+void integrate(GalaxySoA *p, float dt, int n) {
+    int i;
+    
+    for (i = 0; i < n; i++) {
+	    p->x[i] += p->vx[i] * dt;
         p->y[i] += p->vy[i] * dt;
         p->z[i] += p->vz[i] * dt;
     }
@@ -135,6 +142,7 @@ int main(int argc, const char *argv[])
         #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE) 
         for (int sys = 0; sys < num_systems; sys++) {
             bodyForce(&systems[sys], dt, bodies_per_system);
+            integrate(&systems[sys], dt, bodies_per_system);
         }
     }
 
