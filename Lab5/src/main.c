@@ -70,7 +70,7 @@ int main(const int argc, const char *argv[]) {
     double interactions_per_system = (double) bodies_per_system * bodies_per_system;
     double total_interactions = interactions_per_system * num_systems * nIters;
 
-#if CHECK_OUTPUT==1
+#if CHECK_OUTPUT==1 || ONLY_CPU==1
 #if SEQ_CPU == 1
     printf("Running sequential CPU simulation for %d systems...\n",
            num_systems);
@@ -84,14 +84,16 @@ int main(const int argc, const char *argv[]) {
            1e-9 * total_interactions / totalTime);
 #endif
 
+#if ONLY_CPU==0
     printf("Running GPU simulation for %d systems...\n",
            num_systems);
     totalTime = run_gpu_simulation(num_systems, bodies_per_system, nIters, dt, gpu_data);
     printf("\nTotal GPU Time: %.3f seconds\n", totalTime);
     printf("Average GPU Throughput: %0.3f Billion Interactions / second\n",
            1e-9 * total_interactions / totalTime);
+#endif
 
-#if CHECK_OUTPUT==1
+#if CHECK_OUTPUT==1 && ONLY_CPU==0
     int correct = 1;
     for (int i = 0; i < total_bodies; i++) {
     double x_diff = fabs(cpu_data[i].x - gpu_data[i].x);
@@ -107,7 +109,7 @@ int main(const int argc, const char *argv[]) {
         printf("\nGPU data is not correct!\n");
 #endif
 
-#if WRITE_OUTPUT==1
+#if ONLY_CPU==1
     /* Ensure an output filename was provided */
     if (argc >= 3) {
         fp = fopen(argv[2], "wb");

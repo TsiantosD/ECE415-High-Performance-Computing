@@ -9,13 +9,13 @@ CU_FILE_SELECTED=""
 INPUT_ARG=""
 CPU_MODE="omp"
 DEBUG_MODE=0  # 0 = Release (Default), 1 = Debug
-WRITE_OUTPUT=0
+ONLY_CPU=0
 
 # ==========================================
 # Help / Usage Function
 # ==========================================
 usage() {
-    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i input_name] [-sdw]"
+    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i input_name] [-sdo]"
     echo ""
     echo "Flags:"
     echo "  -n: Number of times to run (Default: 1)"
@@ -24,7 +24,7 @@ usage() {
     echo "  -i: Input filename (e.g., 'galaxy_data.bin'). Checks 'Inputs/'."
     echo "  -d: Compile in DEBUG mode (Target: debug). Default is Release."
     echo "  -s: Run CPU version in sequential mode."
-    echo "  -w: Write final CPU output to file."
+    echo "  -o: Run only CPU version and write output to file."
     exit 1
 }
 
@@ -32,7 +32,7 @@ usage() {
 # 1. Parse Flags
 # ==========================================
 # Added 'd' to the option string (no colon after d because it takes no argument)
-while getopts "n:c:f:i:sdw" opt; do
+while getopts "n:c:f:i:sdo" opt; do
     case $opt in
         n) ITERATIONS=$OPTARG ;;
         c) CHECK_OUTPUT_VAL=$OPTARG ;;
@@ -40,7 +40,7 @@ while getopts "n:c:f:i:sdw" opt; do
         i) INPUT_ARG=$OPTARG ;;
         s) CPU_MODE="seq" ;;
         d) DEBUG_MODE=1 ;;
-        w) WRITE_OUTPUT=1 ;;
+        o) ONLY_CPU=1 ;;
         *) usage ;;
     esac
 done
@@ -210,7 +210,7 @@ echo " Input:         $INPUT_ARG"
 echo " CUDA Kernel:   $CU_FILE_SELECTED"
 echo " Iterations:    $ITERATIONS"
 echo " Check Output:  $CHECK_OUTPUT_VAL"
-echo " Write CPU Output:  $WRITE_OUTPUT"
+echo " Only CPU:  $ONLY_CPU"
 echo "========================================"
 echo "Compiling..."
 
@@ -220,9 +220,9 @@ make -C src clean CUDA_SRC="$CU_FILE_SELECTED" > /dev/null
 # Construct Flags
 
 if [ "$DEBUG_MODE" -eq 1 ]; then
-    make -C src debug CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DWRITE_OUTPUT=$WRITE_OUTPUT"
+    make -C src debug CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU"
 else
-    make -C src CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DWRITE_OUTPUT=$WRITE_OUTPUT"
+    make -C src CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU"
 fi
 
 if [ $? -ne 0 ]; then

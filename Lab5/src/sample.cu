@@ -14,15 +14,11 @@
 #define BLOCK_SIZE 32   //TODO think why this <<< better (more computes/thread better?)
 
 typedef struct {
-    float x, y, z, vx, vy, vz;
-} Body;
-
-typedef struct {
     float *x, *y, *z;
     float *vx, *vy, *vz;
 } GalaxySoA;
 
-__global__ void bodyForceKernel(GalaxySoA device_system, float dt, int n) {
+__global__ static void bodyForceKernel(GalaxySoA device_system, float dt, int n) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (i >= n) return;
@@ -61,40 +57,8 @@ __global__ void bodyForceKernel(GalaxySoA device_system, float dt, int n) {
     device_system.z[i] += device_system.vz[i] * dt;
 }
 
-int main(int argc, const char *argv[])
-{
-    int num_systems = 32;
-    int bodies_per_system = 8192;
-    const int nIters = 20;
-    const float dt = 0.01f;
-
-    FILE *fp;
-    Body *data;
-    int total_bodies;
-    double totalTime;
-
-    fp = fopen("galaxy_data.bin", "rb");
-    if (fp) {
-        if (fread(&num_systems, sizeof(int), 1, fp) != 1 ||
-            fread(&bodies_per_system, sizeof(int), 1, fp) != 1) {
-            fprintf(stderr, "Error reading header\n");
-            return EXIT_FAILURE;
-        }
-    }
-
-    total_bodies = num_systems * bodies_per_system;
-    data = (Body *) malloc(total_bodies * sizeof(Body));
-
-    if (fp) {
-        size_t unused = fread(data, sizeof(Body), total_bodies, fp);
-        (void) unused;
-        fclose(fp);
-    } else {
-        printf("Initializing random data...\n");
-        float *buf = (float *) data;
-        for (int i = 0; i < 6 * total_bodies; i++)
-            buf[i] = 2.0f * (rand() / (float) RAND_MAX) - 1.0f;
-    }
+double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
+                          const float dt, Body *data) {
 
     GalaxySoA *systems = (GalaxySoA *) malloc(num_systems * sizeof(GalaxySoA));
     for (int s = 0; s < num_systems; s++) {
@@ -199,20 +163,21 @@ int main(int argc, const char *argv[])
         }
     } 
 
-    totalTime = GetTimer() / 1000.0;
+    double totalTime = GetTimer() / 1000.0;
 
-    double interactions_per_system = (double) bodies_per_system * bodies_per_system;
-    double total_interactions = interactions_per_system * num_systems * nIters;
+    for (int s = 0; s < num_systems; s++) {
+        // Move data back to data array
+        for (int i = 0; i < bodies_per_system; i++) {
+            int idx = s * bodies_per_system + i;
+            data[idx].x  = systems[s].x[i];
+            data[idx].y  = systems[s].y[i];
+            data[idx].z  = systems[s].z[i];
+            data[idx].vx = systems[s].vx[i];
+            data[idx].vy = systems[s].vy[i];
+            data[idx].vz = systems[s].vz[i];
+        }
+    }
 
-    printf("\nTotal Time: %.3f seconds\n", totalTime);
-    printf("Average Throughput: %0.3f Billion Interactions / second\n",
-           1e-9 * total_interactions / totalTime);
-
-    printf("Final position of System 0, Body 0: %.4f, %.4f, %.4f\n",
-           systems[0].x[0], systems[0].y[0], systems[0].z[0]);
-    printf("Final position of System 0, Body 1: %.4f, %.4f, %.4f\n",
-           systems[0].x[1], systems[0].y[1], systems[0].z[1]);
-    
     for (int s = 0; s < num_systems; s++) {
         free(systems[s].x); 
         free(systems[s].y); 
@@ -221,10 +186,8 @@ int main(int argc, const char *argv[])
         free(systems[s].vy);
         free(systems[s].vz);
     }
-    
-    free(data);
     free(systems);
     cudaDeviceReset();
 
-    return 0;
+    return totalTime;
 }
