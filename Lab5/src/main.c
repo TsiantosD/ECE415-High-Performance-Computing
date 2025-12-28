@@ -91,7 +91,10 @@ int main(const int argc, const char *argv[]) {
 #if CHECK_OUTPUT==1
         int correct = 1;
         for (int i = 0; i < total_bodies; i++) {
-            if (cpu_data[i] - gpu_data[i] > ACCURACY) {
+	    double x_diff = abs(cpu_data[i].x - gpu_data[i].x);
+	    double y_diff = abs(cpu_data[i].y - gpu_data[i].y);
+	    double z_diff = abs(cpu_data[i].z - gpu_data[i].z);
+            if (x_diff > ACCURACY || y_diff > ACCURACY || z_diff > ACCURACY) {
                 correct = 0;
                 break;
             }
