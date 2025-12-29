@@ -75,6 +75,8 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
             integrateKernel<<<gridSize, BLOCK_SIZE>>>(system_ptr, dt, bodies_per_system);
         }
     }
+    cudaMemcpy(h_data, d_data, data_size, cudaMemcpyDeviceToHost);
+    CUDA_CHECK_LAST_ERROR();
     stop_timer();
     time = (double) get_timer_ms() / 1000.0f;
 
