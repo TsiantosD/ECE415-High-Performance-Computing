@@ -12,6 +12,8 @@ typedef struct {
 extern "C" {
 #endif
 
+extern void cleanUp(void);
+
 double run_cpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
                             const float dt, Body *data);
 double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
