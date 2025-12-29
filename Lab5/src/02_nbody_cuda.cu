@@ -3,14 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
-#include <time.h>
 #include "helpers.h"
-#include "timer.h"
+#include "gputimer.h"
 #include <unistd.h>
 
 // TODO set this by the script  
 #define GPU_MAX 4 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 256
 
 typedef struct {
     float *x, *y, *z;
@@ -127,6 +126,7 @@ void cleanUp(void) {
                     cudaDeviceReset();
                 }
             }
+	    destroy_timer();
             is_cleaned = 1;
         }
     }
@@ -167,7 +167,8 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     printf("Running on %d GPUs.\n", gpu_used);
 
     omp_set_num_threads(gpu_used);
-    StartTimer();
+    create_timer();
+    start_timer();
 
     #pragma omp parallel
     {
@@ -247,9 +248,9 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
             CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(&(systemsHost.vz[start_sys * bodies_per_system]), systemsDevice[gpu_id].vz, bytes, cudaMemcpyDeviceToHost);
             CUDA_CHECK_LAST_ERROR();
-        } 
+        }
     }
-    
+
     omp_set_num_threads(omp_get_max_threads());
     #pragma omp parallel for
     for (int i = 0; i < totalBodies; i++) {
@@ -261,8 +262,9 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
         data[i].vy = systemsHost.vy[i];
         data[i].vz = systemsHost.vz[i];
     }
-    
-    double total_time = GetTimer() / 1000.0f;
+
+    stop_timer();
+    double total_time = (double) get_timer_ms() / 1000.0f;
     cleanUp();
 
     return total_time;
