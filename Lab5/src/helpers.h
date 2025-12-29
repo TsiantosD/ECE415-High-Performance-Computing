@@ -1,6 +1,7 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 #include <time.h> 
+#include <stdio.h>
 
 #define SOFTENING 0.01f
 
