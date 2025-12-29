@@ -100,7 +100,7 @@ __global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_syst
     galaxy.z[global_idx] += galaxy.vz[global_idx] * dt;
 }
 
-void cleanUp() {
+void cleanUp(void) {
     #pragma omp critical
     {
         static int is_cleaned = 0;

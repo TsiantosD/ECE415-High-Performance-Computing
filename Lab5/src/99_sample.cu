@@ -56,7 +56,7 @@ __global__ static void bodyForceKernel(GalaxySoA device_system, float dt, int n)
     device_system.z[i] += device_system.vz[i] * dt;
 }
 
-extern "C" double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
+double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
                           const float dt, Body *data) {
 
     GalaxySoA *systems = (GalaxySoA *) malloc(num_systems * sizeof(GalaxySoA));
