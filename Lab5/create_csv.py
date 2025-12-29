@@ -76,8 +76,9 @@ def process_logs(input_folder, output_csv):
     # Get all files
     files = [f for f in os.listdir(input_folder) if os.path.isfile(os.path.join(input_folder, f))]
     
-    # Sort files to make CSV look orderly (optional)
-    files.sort()
+    # Sort files numerically based on the number in the filename
+    # matches 'run_1.log', 'run_20.log' etc.
+    files.sort(key=lambda f: int(re.search(r'(\d+)', f).group(1)) if re.search(r'(\d+)', f) else 0)
 
     for filename in files:
         file_path = os.path.join(input_folder, filename)

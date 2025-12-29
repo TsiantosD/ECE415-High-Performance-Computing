@@ -1,2 +1,10 @@
 *
 !.gitignore
+!omp_cpu/
+!omp_cpu/galaxy_data
+!omp_cpu/galaxy_data/*
+!seq_cpu/
+!seq_cpu/galaxy_data
+!seq_cpu/galaxy_data/*
+!seq_cpu*.csv
+!omp_cpu*.csv

@@ -1,0 +1,6 @@
+Found dataset: 32 systems of 8192 bodies.
+Running parallel CPU simulation for 32 systems...
+Total CPU Time: 4.126 seconds
+Average CPU Throughput: 10.410 Billion Interactions / second
+
+Successfully wrote CPU simulation data to Outputs/galaxy_data_out.bin
