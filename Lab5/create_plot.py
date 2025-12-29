@@ -6,7 +6,7 @@ import os
 import re
 
 # --- CONFIGURATION ---
-INPUT_DIR = "."
+INPUT_DIR = "./reports"
 FILENAME_COL = "Filename"
 
 # 1. METRIC CONFIGURATION
