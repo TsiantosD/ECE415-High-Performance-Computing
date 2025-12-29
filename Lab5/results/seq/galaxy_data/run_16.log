@@ -1,0 +1,6 @@
+Found dataset: 32 systems of 8192 bodies.
+Running parallel CPU simulation for 32 systems...
+  5.00% | 1/20 | 0.00 it/s 10.00% | 2/20 | 0.07 it/s 15.00% | 3/20 | 0.07 it/s 20.00% | 4/20 | 0.07 it/s 25.00% | 5/20 | 0.07 it/s 30.00% | 6/20 | 0.07 it/s 35.00% | 7/20 | 0.07 it/s 40.00% | 8/20 | 0.07 it/s 45.00% | 9/20 | 0.07 it/s 50.00% | 10/20 | 0.07 it/s 55.00% | 11/20 | 0.07 it/s 60.00% | 12/20 | 0.07 it/s 65.00% | 13/20 | 0.07 it/s 70.00% | 14/20 | 0.07 it/s 75.00% | 15/20 | 0.07 it/s 80.00% | 16/20 | 0.07 it/s 85.00% | 17/20 | 0.07 it/s 90.00% | 18/20 | 0.07 it/s 95.00% | 19/20 | 0.07 it/s100.00% | 20/20 | 0.07 it/sTotal CPU Time: 292.977 seconds
+Average CPU Throughput: 0.147 Billion Interactions / second
+
+Successfully wrote CPU simulation data to Outputs/galaxy_data_out.bin
