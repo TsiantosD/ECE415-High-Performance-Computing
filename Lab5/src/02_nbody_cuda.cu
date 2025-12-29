@@ -7,9 +7,13 @@
 #include "gputimer.h"
 #include <unistd.h>
 
-// TODO set this by the script  
-#define GPU_MAX 4 
-#define BLOCK_SIZE 256
+#ifndef GPU_MAX
+#define GPU_MAX 4
+#endif
+
+#ifndef BLOCK_SIZE
+#define BLOCK_SIZE 32
+#endif
 
 typedef struct {
     float *x, *y, *z;

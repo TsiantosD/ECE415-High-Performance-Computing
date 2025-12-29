@@ -1,7 +1,9 @@
 #include "helpers.h"
 #include "gputimer.h"
 
+#ifndef BLOCK_SIZE
 #define BLOCK_SIZE 32
+#endif
 
 /* Update a single galaxy. Parameters:
     - array of bodies

@@ -7,6 +7,8 @@ ITERATIONS=1
 CHECK_OUTPUT_VAL=1
 CU_FILE_SELECTED=""
 INPUT_ARG=""
+BLOCK_SIZE=32
+GPU_MAX=4
 CPU_MODE="omp"
 DEBUG_MODE=0  # 0 = Release (Default), 1 = Debug
 ONLY_CPU=0
@@ -15,15 +17,17 @@ ONLY_CPU=0
 # Help / Usage Function
 # ==========================================
 usage() {
-    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i input_name] [-sdo]"
+    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i input_name] [-b block_size] [-g gpu_count] [-sdo]"
     echo ""
     echo "Flags:"
     echo "  -n: Number of times to run (Default: 1)"
     echo "  -c: Value for CHECK_OUTPUT (Default: 1)"
     echo "  -f: Specific .cu file (e.g., 'clahe.cu') OR a number ('1' for 1st file)"
     echo "  -i: Input filename (e.g., 'galaxy_data.bin'). Checks 'Inputs/'."
-    echo "  -d: Compile in DEBUG mode (Target: debug). Default is Release."
+    echo "  -b: Set the BLOCK_SIZE macro."
+    echo "  -g: Set the GPU_MAX macro."
     echo "  -s: Run CPU version in sequential mode."
+    echo "  -d: Compile in DEBUG mode (Target: debug). Default is Release."
     echo "  -o: Run only CPU version and write output to file."
     exit 1
 }
@@ -32,12 +36,14 @@ usage() {
 # 1. Parse Flags
 # ==========================================
 # Added 'd' to the option string (no colon after d because it takes no argument)
-while getopts "n:c:f:i:sdo" opt; do
+while getopts "n:c:f:i:b:g:sdo" opt; do
     case $opt in
         n) ITERATIONS=$OPTARG ;;
         c) CHECK_OUTPUT_VAL=$OPTARG ;;
         f) CU_FILE_SELECTED=$OPTARG ;;
         i) INPUT_ARG=$OPTARG ;;
+        b) BLOCK_SIZE=$OPTARG ;;
+        g) GPU_MAX=$OPTARG ;;
         s) CPU_MODE="seq" ;;
         d) DEBUG_MODE=1 ;;
         o) ONLY_CPU=1 ;;
@@ -225,9 +231,9 @@ else
 fi
 
 if [ "$DEBUG_MODE" -eq 1 ]; then
-    make -C src debug CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU"
+    make -C src debug CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
 else
-    make -C src CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU"
+    make -C src CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
 fi
 
 if [ $? -ne 0 ]; then
