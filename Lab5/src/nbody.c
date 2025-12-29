@@ -1,8 +1,5 @@
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
 #include "helpers.h"
 #include "timer.h"
 
@@ -13,7 +10,7 @@
 */
 static void bodyForce(Body * p, float dt, int n) {
     int i, j;
-    double Fx, Fy, Fz, dx, dy, dz, distSqr, invDist, invDist3;
+    float Fx, Fy, Fz, dx, dy, dz, distSqr, invDist, invDist3;
 
     for (i = 0; i < n; i++) {
 	    Fx = 0.0f;
@@ -38,7 +35,7 @@ static void bodyForce(Body * p, float dt, int n) {
         p[i].vz += dt * Fz;
     }
 }
-int counter = 0;
+
 /* Integrate positions.
     - array of bodies
     - time step
@@ -48,7 +45,6 @@ static void integrate(Body * p, float dt, int n) {
     int i;
     
     for (i = 0; i < n; i++) {
-        counter++;
 	    p[i].x += p[i].vx * dt;
         p[i].y += p[i].vy * dt;
         p[i].z += p[i].vz * dt;
