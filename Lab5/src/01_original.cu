@@ -1,6 +1,5 @@
-#include <math.h>
-#include <cuda_runtime.h>
 #include "helpers.h"
+#include "gputimer.h"
 
 #define BLOCK_SIZE 32
 
@@ -53,20 +52,14 @@ __global__ void integrateKernel(Body *p, float dt, int n) {
 }
 
 Body *d_data;
-cudaEvent_t start, stop;
 
 double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, const float dt, Body *h_data) {
     int total_bodies = num_systems * bodies_per_system;
     size_t data_size = total_bodies * sizeof(Body);
-    float time;
+    double time;
 
-    cudaEventCreate(&start);
-    CUDA_CHECK_LAST_ERROR();
-    cudaEventCreate(&stop);
-    CUDA_CHECK_LAST_ERROR();
-    cudaEventRecord(start);
-    CUDA_CHECK_LAST_ERROR();
-
+    create_timer();
+    start_timer();
     cudaMalloc((void**)&d_data, data_size);
     CUDA_CHECK_LAST_ERROR();
     cudaMemcpy(d_data, h_data, data_size, cudaMemcpyHostToDevice);
@@ -82,17 +75,15 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
             integrateKernel<<<gridSize, BLOCK_SIZE>>>(system_ptr, dt, bodies_per_system);
         }
     }
-
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, stop);
-    CUDA_CHECK_LAST_ERROR();
+    stop_timer();
+    time = (double) get_timer_ms() / 1000.0f;
 
     cleanUp();
 
-    return (double) time / 1000.0f;
+    return time;
 }
 
 void cleanUp() {
+    destroy_timer();
     cudaFree(d_data);
 }
