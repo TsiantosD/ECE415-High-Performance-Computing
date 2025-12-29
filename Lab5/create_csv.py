@@ -2,129 +2,163 @@ import os
 import re
 import csv
 import statistics
-import argparse
 import sys
 
-def extract_gpu_throughput(file_path):
+def extract_metrics(file_path):
     """
-    Parses a log file to find the GPU Throughput value.
-    Returns the throughput as a float, or None if not found.
+    Parses a log file to find CPU and GPU Throughput values.
+    Returns a dict with 'cpu', 'gpu', and 'note'.
     """
+    metrics = {'cpu': None, 'gpu': None, 'note': ''}
+    
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Logic: Find "Running GPU..." and capture the Throughput value that follows it.
-        # We use a non-greedy match for the content between the header and the throughput line.
-        pattern = r"Running GPU CLAHE reference\.\.\..*?Throughput:\s+([\d\.]+)\s+MPixels/s"
-        
-        # re.DOTALL allows the dot (.) to match newlines, handling multi-line search
-        match = re.search(pattern, content, re.DOTALL)
-        
-        if match:
-            return float(match.group(1))
-        return None
+        # 1. Extract CPU Throughput
+        # Matches: "Average CPU Throughput: 10.257"
+        cpu_pattern = r"Average CPU Throughput:\s+([\d\.]+)"
+        cpu_match = re.search(cpu_pattern, content)
+        if cpu_match:
+            metrics['cpu'] = float(cpu_match.group(1))
+
+        # 2. Extract GPU Throughput
+        # Matches: "Average GPU Throughput: 16.962"
+        gpu_pattern = r"Average GPU Throughput:\s+([\d\.]+)"
+        gpu_match = re.search(gpu_pattern, content)
+        if gpu_match:
+            metrics['gpu'] = float(gpu_match.group(1))
+
+        # 3. Check for Correctness / Errors
+        if "GPU data is not correct!" in content:
+            metrics['note'] = "INCORRECT DATA"
+        elif "CUDA Error" in content:
+            metrics['note'] = "CUDA ERROR"
+
+        return metrics
         
     except Exception as e:
         print(f"Error reading {file_path}: {e}")
-        return None
+        return metrics
+
+def calculate_stats(values):
+    """Helper to calculate avg and std_dev with outlier removal (min/max)."""
+    if not values:
+        return 0.0, 0.0, "No data"
+
+    sorted_vals = sorted(values)
+    
+    # Filter outliers if we have enough data (>2 points)
+    if len(sorted_vals) > 2:
+        filtered_vals = sorted_vals[1:-1]
+        note = f"(n={len(values)}, removed min/max)"
+    else:
+        filtered_vals = sorted_vals
+        note = f"(n={len(values)})"
+
+    avg = statistics.mean(filtered_vals)
+    std_dev = statistics.stdev(filtered_vals) if len(filtered_vals) > 1 else 0.0
+    
+    return avg, std_dev, note
 
 def process_logs(input_folder, output_csv):
     """
-    Iterates through the folder, extracts data, calculates stats, and saves to CSV.
+    Iterates through folder, extracts N-Body stats, saves to CSV.
     """
     data_points = []
 
-    # 1. Iterate through files
     if not os.path.exists(input_folder):
         print(f"Error: Folder '{input_folder}' does not exist.")
         return
 
     print(f"Scanning folder: {input_folder}...")
     
+    # Get all files
     files = [f for f in os.listdir(input_folder) if os.path.isfile(os.path.join(input_folder, f))]
     
+    # Sort files to make CSV look orderly (optional)
+    files.sort()
+
     for filename in files:
         file_path = os.path.join(input_folder, filename)
-        throughput = extract_gpu_throughput(file_path)
+        metrics = extract_metrics(file_path)
         
-        if throughput is not None:
-            data_points.append({'filename': filename, 'throughput': throughput})
+        # Only add if we found at least one metric
+        if metrics['cpu'] is not None or metrics['gpu'] is not None:
+            data_points.append({
+                'filename': filename, 
+                'cpu': metrics['cpu'], 
+                'gpu': metrics['gpu'],
+                'note': metrics['note']
+            })
 
     if not data_points:
-        print("No valid GPU throughput data found in logs.")
+        print("No valid N-Body data found in logs.")
         return
 
-    # 2. Extract values for statistics
-    values = [d['throughput'] for d in data_points]
+    # --- Calculate Statistics ---
     
-    # 3. Filter outliers (Remove Min and Max)
-    # We sort the values first
-    sorted_values = sorted(values)
-    
-    if len(sorted_values) > 2:
-        # Remove the smallest and largest
-        filtered_values = sorted_values[1:-1]
-        removed_info = f"(Removed min: {sorted_values[0]} and max: {sorted_values[-1]})"
-    else:
-        # If we have 2 or fewer items, we cannot remove min AND max and still have data
-        filtered_values = sorted_values
-        removed_info = "(Not enough data to remove outliers)"
+    # Extract valid CPU values (ignore Nones)
+    cpu_values = [d['cpu'] for d in data_points if d['cpu'] is not None]
+    cpu_avg, cpu_std, cpu_note = calculate_stats(cpu_values)
 
-    # 4. Calculate Statistics on filtered data
-    if filtered_values:
-        avg_throughput = statistics.mean(filtered_values)
-        # stdev requires at least two data points
-        std_dev_throughput = statistics.stdev(filtered_values) if len(filtered_values) > 1 else 0.0
-    else:
-        avg_throughput = 0.0
-        std_dev_throughput = 0.0
+    # Extract valid GPU values
+    gpu_values = [d['gpu'] for d in data_points if d['gpu'] is not None]
+    gpu_avg, gpu_std, gpu_note = calculate_stats(gpu_values)
 
-    # 5. Write to CSV
+    # --- Write CSV ---
     try:
         with open(output_csv, 'w', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['Filename', 'GPU Throughput (MPixels/s)']
+            fieldnames = ['Filename', 'CPU GInt/s', 'GPU GInt/s', 'Note']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
             writer.writeheader()
             for item in data_points:
                 writer.writerow({
                     'Filename': item['filename'], 
-                    'GPU Throughput (MPixels/s)': item['throughput']
+                    'CPU GInt/s': item['cpu'] if item['cpu'] else "", 
+                    'GPU GInt/s': item['gpu'] if item['gpu'] else "",
+                    'Note': item['note']
                 })
 
-            # Add an empty row for separation
+            # Separation row
             writer.writerow({})
-            writer.writerow({'Filename': '--- STATISTICS (Excluding Min/Max) ---', 'GPU Throughput (MPixels/s)': ''})
+            writer.writerow({'Filename': '--- STATISTICS ---'})
             
+            # CPU Stats Row
             writer.writerow({
-                'Filename': 'Average', 
-                'GPU Throughput (MPixels/s)': f"{avg_throughput:.4f}"
+                'Filename': 'CPU Average', 
+                'CPU GInt/s': f"{cpu_avg:.4f}",
+                'Note': cpu_note
             })
             writer.writerow({
-                'Filename': 'Standard Deviation', 
-                'GPU Throughput (MPixels/s)': f"{std_dev_throughput:.4f}"
+                'Filename': 'CPU Std Dev', 
+                'CPU GInt/s': f"{cpu_std:.4f}"
+            })
+
+            # GPU Stats Row
+            writer.writerow({
+                'Filename': 'GPU Average', 
+                'GPU GInt/s': f"{gpu_avg:.4f}",
+                'Note': gpu_note
             })
             writer.writerow({
-                'Filename': 'Note', 
-                'GPU Throughput (MPixels/s)': removed_info
+                'Filename': 'GPU Std Dev', 
+                'GPU GInt/s': f"{gpu_std:.4f}"
             })
 
         print(f"Successfully processed {len(data_points)} logs.")
-        print(f"Stats (Filtered): Avg={avg_throughput:.2f}, StdDev={std_dev_throughput:.2f}")
+        print(f"CPU Stats: Avg={cpu_avg:.2f}, StdDev={cpu_std:.2f}")
+        print(f"GPU Stats: Avg={gpu_avg:.2f}, StdDev={gpu_std:.2f}")
         print(f"Output saved to: {output_csv}")
 
     except IOError as e:
         print(f"Error writing to CSV: {e}")
 
 if __name__ == "__main__":
-    # You can hardcode paths here or pass them as arguments
-    # Example usage: python script.py ./logs results.csv
-    
     if len(sys.argv) < 2:
-        print("Usage: python log_parser.py <input_folder_path> [output_csv_path]")
-        print("Example: python log_parser.py ./my_logs output.csv")
+        print("Usage: python create_csv.py <input_folder_path> [output_csv_path]")
     else:
         in_folder = sys.argv[1]
-        out_csv = sys.argv[2] if len(sys.argv) > 2 else "gpu_stats.csv"
+        out_csv = sys.argv[2] if len(sys.argv) > 2 else "nbody_stats.csv"
         process_logs(in_folder, out_csv)

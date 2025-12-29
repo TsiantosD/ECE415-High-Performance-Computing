@@ -260,7 +260,9 @@ done
 echo "--------------------------------------"
 echo "Done."
 
+TEMP_VAR="${LOG_DIR#results/}"
+REPORT_FILE="${TEMP_VAR//\//-}.csv"
 if [ "$ITERATIONS" -gt 1 ]; then
     echo "Creating csv from data..."
-    python3 create_csv.py "$LOG_DIR" "$LOG_DIR/report.csv"
+    python3 create_csv.py "$LOG_DIR" "results/$REPORT_FILE"
 fi
