@@ -23,14 +23,15 @@ typedef struct {
 GalaxySoA systemsHost;
 GalaxySoA systemsDevice[GPU_MAX];
 
-__global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) 
-{
+__global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
+    //! Find system and position of threads in a range of [0, BLOCK_SIZE] 
     int system_idx = blockIdx.y; 
     int body_local_idx = blockIdx.x * blockDim.x + threadIdx.x;
     int system_offset = system_idx * bodies_per_system;
     
     if (body_local_idx >= bodies_per_system) return;
 
+    //! Global memory index for the current block of bodies (of size BLOCK_SIZE)
     int global_idx = system_offset + body_local_idx;
 
     float my_x = galaxy.x[global_idx];
@@ -49,9 +50,12 @@ __global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system,
 
     int num_tiles = (bodies_per_system + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
+    //! Iterate upon chunks/tiles of BLOCK_SIZE
+    //! This is possible due to velocity calculations being associative
     for (int tile = 0; tile < num_tiles; tile++) {
         int t_idx = tile * BLOCK_SIZE + threadIdx.x;
         
+        //! Load that chunk into shared memory for all threads to access
         if (t_idx < bodies_per_system) {
             sh_x[threadIdx.x] = galaxy.x[system_offset + t_idx];
             sh_y[threadIdx.x] = galaxy.y[system_offset + t_idx];
@@ -63,6 +67,7 @@ __global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system,
         }
         __syncthreads();
 
+        //! Each thread computes its data
         #pragma unroll
         for (int j = 0; j < BLOCK_SIZE; j++) {
             int interaction_idx = tile * BLOCK_SIZE + j;
@@ -83,13 +88,14 @@ __global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system,
         __syncthreads();
     }
 
+    //! After all tile iterations are done update galaxy data 
     galaxy.vx[global_idx] = my_vx + dt * Fx;
     galaxy.vy[global_idx] = my_vy + dt * Fy;
     galaxy.vz[global_idx] = my_vz + dt * Fz;
 }
 
-__global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) 
-{
+__global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
+    //! Same indexing as forces kernel
     int system_idx = blockIdx.y; 
     int body_local_idx = blockIdx.x * blockDim.x + threadIdx.x;
     int system_offset = system_idx * bodies_per_system;
