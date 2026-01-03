@@ -172,62 +172,118 @@ OUTPUT_PATH="Outputs/${BASENAME}_out.${EXTENSION}"
 mkdir -p Outputs/
 
 # ==========================================
-# 4. Select CUDA File (If not specified)
+# 4. Select Execution Mode & Source File
 # ==========================================
-if [ "$ONLY_CPU" -eq 0 ]; then
-    if [ ! -d "src" ]; then
-        echo "Error: 'src' directory not found."
-        exit 1
-    fi
 
-    CU_FILES=()
-    while IFS= read -r line; do
-        CU_FILES+=("$line")
-    done < <(find src -maxdepth 1 -name "*.cu" | sort)
+if [ -z "$CU_FILE_SELECTED" ] && [ "$ONLY_CPU" -eq 0 ]; then
+    echo "Select execution mode:"
+    echo "  [1] CPU Sequential"
+    echo "  [2] CPU OpenMP"
+    echo "  [3] GPU"
+    echo "  [4] GPU + OpenMP"
+    echo "----------------------------------------"
+    read -p "Choice (Default 3): " mode_choice
+    echo ""
 
-    NUM_FILES=${#CU_FILES[@]}
+    [ -z "$mode_choice" ] && mode_choice=3
 
-    if [ "$NUM_FILES" -eq 0 ]; then
-        echo "Error: No .cu files found in src/."
-        exit 1
-    fi
+    case "$mode_choice" in
+        1)
+            ONLY_CPU=1
+            CPU_MODE="seq"
+            FILE_PATTERN="*.c"
+            EXCLUDE_PATTERN="_omp.c"
+            EXCLUDE_FILES=("main.c" "results_check.c")
+            ;;
+        2)
+            ONLY_CPU=1
+            CPU_MODE="omp"
+            FILE_PATTERN="*_omp.c"
+            EXCLUDE_FILES=()
+            ;;
+        3)
+            ONLY_CPU=0
+            CPU_MODE="seq"
+            FILE_PATTERN="*.cu"
+            EXCLUDE_FILES=()
+            ;;
+        4)
+            ONLY_CPU=0
+            CPU_MODE="omp"
+            FILE_PATTERN="*.cu"
+            EXCLUDE_FILES=()
+            ;;
+        *)
+            echo "Invalid selection."
+            exit 1
+            ;;
+    esac
 
-    if [ -n "$CU_FILE_SELECTED" ]; then
-        if [[ "$CU_FILE_SELECTED" =~ ^[0-9]+$ ]]; then
-            INDEX=$CU_FILE_SELECTED
-            if [ "$INDEX" -ge 1 ] && [ "$INDEX" -le "$NUM_FILES" ]; then
-                CU_FILE_SELECTED=$(basename "${CU_FILES[$((INDEX-1))]}")
-            else
-                echo "Error: Index $INDEX is out of range (1-$NUM_FILES)."
-                exit 1
+    if [ "$ONLY_CPU" -eq 1 ]; then
+        SRC_FILES=()
+        while IFS= read -r f; do
+            fname=$(basename "$f")
+            skip=0
+            # Exclude specified files
+            for excl in "${EXCLUDE_FILES[@]}"; do
+                if [ "$fname" == "$excl" ]; then
+                    skip=1
+                    break
+                fi
+            done
+            # Exclude pattern (_omp.c) if needed
+            if [ -n "${EXCLUDE_PATTERN:-}" ] && [[ "$fname" =~ $EXCLUDE_PATTERN ]]; then
+                skip=1
             fi
-        else
-            CU_FILE_SELECTED=$(basename "$CU_FILE_SELECTED")
+            [ $skip -eq 0 ] && SRC_FILES+=("$f")
+        done < <(find src -maxdepth 1 -name "$FILE_PATTERN")
+
+        if [ ${#SRC_FILES[@]} -eq 0 ]; then
+            echo "No matching CPU source files found."
+            exit 1
         fi
-    else
-        echo "No .cu file specified. Searching in 'src/'..."
+
         echo "----------------------------------------"
-        echo "Available Kernels:"
+        echo "Available CPU sources:"
         i=1
-        for file in "${CU_FILES[@]}"; do
-            echo "  [$i] $(basename "$file")"
+        for f in "${SRC_FILES[@]}"; do
+            echo "  [$i] $(basename "$f")"
             ((i++))
         done
         echo "----------------------------------------"
-        read -p "Select kernel # (Default 1): " selection
+        read -p "Select file (Default 1): " selection
         echo ""
-        [ -z "$selection" ] && selection=1
 
-        if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le "$NUM_FILES" ]; then
-            CU_FILE_SELECTED=$(basename "${CU_FILES[$((selection-1))]}")
-        else
-            echo "Invalid selection."
+        [ -z "$selection" ] && selection=1
+        CU_FILE_SELECTED="$(basename "${SRC_FILES[$((selection-1))]}")"
+
+    else
+        CU_FILES=()
+        while IFS= read -r f; do
+            CU_FILES+=("$f")
+        done < <(find src -maxdepth 1 -name "*.cu" | sort)
+
+        if [ ${#CU_FILES[@]} -eq 0 ]; then
+            echo "No CUDA files found."
             exit 1
         fi
+
+        echo "----------------------------------------"
+        echo "Available CUDA kernels:"
+        i=1
+        for f in "${CU_FILES[@]}"; do
+            echo "  [$i] $(basename "$f")"
+            ((i++))
+        done
+        echo "----------------------------------------"
+        read -p "Select kernel (Default 1): " selection
+        echo ""
+
+        [ -z "$selection" ] && selection=1
+        CU_FILE_SELECTED="$(basename "${CU_FILES[$((selection-1))]}")"
     fi
-else
-    CU_FILE_SELECTED="(CPU only)"
 fi
+
 
 # ==========================================
 # 5. Compile
