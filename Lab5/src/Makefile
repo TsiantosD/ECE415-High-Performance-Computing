@@ -45,6 +45,19 @@ else
     CPU_COMPILE_FLAGS = $(COMMON_FLAGS) $(OMP_FLAGS)
 endif
 
+
+# ================== CPU-ONLY MODE ==================
+
+ifeq ($(ONLY_CPU),1)
+    CUDA_OBJ :=
+    LINKER := $(CC)
+    LINK_FLAGS := $(COMMON_FLAGS)
+else
+    LINKER := $(NVCC)
+    LINK_FLAGS := $(NVCC_FLAGS)
+endif
+
+
 # ================== EXECUTABLES ==================
 
 MAIN_EXE = main
@@ -60,7 +73,7 @@ debug: $(MAIN_EXE) $(RESULTS_CHECK_EXE)
 # ================== MAIN TARGET ==================
 
 $(MAIN_EXE): $(MAIN_OBJ) $(CHOSEN_CPU_OBJ) $(CUDA_OBJ)
-	$(NVCC) $(NVCC_FLAGS) $^ -o $@
+	$(LINKER) $(LINK_FLAGS) $^ -o $@
 
 $(MAIN_OBJ): $(MAIN_SRC)
 	$(CC) $(COMMON_FLAGS) -c $< -o $@
@@ -85,8 +98,10 @@ $(SEQ_OBJ): $(SEQ_SRC)
 
 # ================== CUDA BUILD ==================
 
+ifneq ($(ONLY_CPU),1)
 $(CUDA_OBJ): $(CUDA_SRC)
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
+endif
 
 # ================== CLEAN ==================
 

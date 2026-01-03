@@ -17,37 +17,67 @@ ONLY_CPU=0
 # Help / Usage Function
 # ==========================================
 usage() {
-    echo "Usage: $0 [-n iterations] [-c check_output_val] [-f cuda_file.cu] [-i input_name] [-b block_size] [-g gpu_count] [-sdo]"
+    echo "Usage:"
+    echo "  $0 [options]"
     echo ""
-    echo "Flags:"
-    echo "  -n: Number of times to run (Default: 1)"
-    echo "  -c: Value for CHECK_OUTPUT (Default: 1)"
-    echo "  -f: Specific .cu file (e.g., 'clahe.cu') OR a number ('1' for 1st file)"
-    echo "  -i: Input filename (e.g., 'galaxy_data.bin'). Checks 'Inputs/'."
-    echo "  -b: Set the BLOCK_SIZE macro."
-    echo "  -g: Set the GPU_MAX macro."
-    echo "  -s: Run CPU version in sequential mode."
-    echo "  -d: Compile in DEBUG mode (Target: debug). Default is Release."
-    echo "  -o: Run only CPU version and write output to file."
+    echo "Options:"
+    echo "  -n, --iterations=N       Number of runs (default: 1)"
+    echo "  -c, --check-output=VAL   Value for CHECK_OUTPUT macro (default: 1)"
+    echo "  -f, --file=FILE|INDEX    CUDA .cu file name or index (e.g. 02_nbody_cuda.cu or 2)"
+    echo "  -i, --input=FILE         Input file from Inputs/ directory"
+    echo "  -b, --block-size=N       CUDA BLOCK_SIZE macro (default: 32)"
+    echo "  -g, --gpu-max=N          GPU_MAX macro (default: 4)"
+    echo "  -s, --sequential         Run CPU version sequentially (disable OpenMP)"
+    echo "  -d, --debug              Compile in DEBUG mode"
+    echo "  -o, --only-cpu           Run CPU version only (no GPU)"
+    echo "  -h, --help               Show this help message and exit"
+    echo ""
+    echo "Examples:"
+    echo "  $0 --iterations=10 --file=2 --input=galaxy_data.bin"
+    echo "  $0 -n 5 -s -d"
     exit 1
 }
 
 # ==========================================
 # 1. Parse Flags
 # ==========================================
-# Added 'd' to the option string (no colon after d because it takes no argument)
-while getopts "n:c:f:i:b:g:sdo" opt; do
-    case $opt in
-        n) ITERATIONS=$OPTARG ;;
-        c) CHECK_OUTPUT_VAL=$OPTARG ;;
-        f) CU_FILE_SELECTED=$OPTARG ;;
-        i) INPUT_ARG=$OPTARG ;;
-        b) BLOCK_SIZE=$OPTARG ;;
-        g) GPU_MAX=$OPTARG ;;
-        s) CPU_MODE="seq" ;;
-        d) DEBUG_MODE=1 ;;
-        o) ONLY_CPU=1 ;;
-        *) usage ;;
+PARSED_OPTS=$(getopt \
+    -o n:c:f:i:b:g:sdoh \
+    --long iterations:,check-output:,file:,input:,block-size:,gpu-max:,sequential,debug,only-cpu,help \
+    -n "$0" -- "$@")
+
+if [ $? -ne 0 ]; then
+    usage
+fi
+
+eval set -- "$PARSED_OPTS"
+
+while true; do
+    case "$1" in
+        -n|--iterations)
+            ITERATIONS="$2"; shift 2 ;;
+        -c|--check-output)
+            CHECK_OUTPUT_VAL="$2"; shift 2 ;;
+        -f|--file)
+            CU_FILE_SELECTED="$2"; shift 2 ;;
+        -i|--input)
+            INPUT_ARG="$2"; shift 2 ;;
+        -b|--block-size)
+            BLOCK_SIZE="$2"; shift 2 ;;
+        -g|--gpu-max)
+            GPU_MAX="$2"; shift 2 ;;
+        -s|--sequential)
+            CPU_MODE="seq"; shift ;;
+        -d|--debug)
+            DEBUG_MODE=1; shift ;;
+        -o|--only-cpu)
+            ONLY_CPU=1; shift ;;
+        -h|--help)
+            usage ;;
+        --)
+            shift; break ;;
+        *)
+            usage ;;
     esac
 done
 
@@ -144,64 +174,59 @@ mkdir -p Outputs/
 # ==========================================
 # 4. Select CUDA File (If not specified)
 # ==========================================
-if [ ! -d "src" ]; then
-    echo "Error: 'src' directory not found."
-    exit 1
-fi
-
-# Safer way to read files into an array (handles spaces/newlines correctly)
-CU_FILES=()
-while IFS= read -r line; do
-    CU_FILES+=("$line")
-done < <(find src -maxdepth 1 -name "*.cu" | sort)
-
-NUM_FILES=${#CU_FILES[@]}
-
-# Sanity check to prevent the "integer expression" error
-if [ -z "$NUM_FILES" ] || [ "$NUM_FILES" -eq 0 ]; then
-    echo "Error: No .cu files found in src/."
-    exit 1
-fi
-
-if [ -n "$CU_FILE_SELECTED" ]; then
-    # Check if user provided a NUMBER (Integer)
-    if [[ "$CU_FILE_SELECTED" =~ ^[0-9]+$ ]]; then
-        INDEX=$CU_FILE_SELECTED
-        
-        # Validate Range
-        if [ "$INDEX" -ge 1 ] && [ "$INDEX" -le "$NUM_FILES" ]; then
-            FULL_CU_PATH=${CU_FILES[$((INDEX-1))]}
-            CU_FILE_SELECTED=$(basename "$FULL_CU_PATH")
-        else
-            echo "Error: Index $INDEX is out of range (1-$NUM_FILES)."
-            exit 1
-        fi
-    else
-        # User provided a filename string
-        CU_FILE_SELECTED=$(basename "$CU_FILE_SELECTED")
-    fi
-else
-    # Interactive Mode
-    echo "No .cu file specified. Searching in 'src/'..."
-    echo "----------------------------------------"
-    echo "Available Kernels:"
-    i=1
-    for file in "${CU_FILES[@]}"; do
-        echo "  [$i] $(basename "$file")"
-        ((i++))
-    done
-    echo "----------------------------------------"
-    read -p "Select kernel # (Default 1): " selection
-    echo ""
-    [ -z "$selection" ] && selection=1
-
-    if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le "$NUM_FILES" ]; then
-        FULL_CU_PATH=${CU_FILES[$((selection-1))]}
-        CU_FILE_SELECTED=$(basename "$FULL_CU_PATH")
-    else
-        echo "Invalid selection."
+if [ "$ONLY_CPU" -eq 0 ]; then
+    if [ ! -d "src" ]; then
+        echo "Error: 'src' directory not found."
         exit 1
     fi
+
+    CU_FILES=()
+    while IFS= read -r line; do
+        CU_FILES+=("$line")
+    done < <(find src -maxdepth 1 -name "*.cu" | sort)
+
+    NUM_FILES=${#CU_FILES[@]}
+
+    if [ "$NUM_FILES" -eq 0 ]; then
+        echo "Error: No .cu files found in src/."
+        exit 1
+    fi
+
+    if [ -n "$CU_FILE_SELECTED" ]; then
+        if [[ "$CU_FILE_SELECTED" =~ ^[0-9]+$ ]]; then
+            INDEX=$CU_FILE_SELECTED
+            if [ "$INDEX" -ge 1 ] && [ "$INDEX" -le "$NUM_FILES" ]; then
+                CU_FILE_SELECTED=$(basename "${CU_FILES[$((INDEX-1))]}")
+            else
+                echo "Error: Index $INDEX is out of range (1-$NUM_FILES)."
+                exit 1
+            fi
+        else
+            CU_FILE_SELECTED=$(basename "$CU_FILE_SELECTED")
+        fi
+    else
+        echo "No .cu file specified. Searching in 'src/'..."
+        echo "----------------------------------------"
+        echo "Available Kernels:"
+        i=1
+        for file in "${CU_FILES[@]}"; do
+            echo "  [$i] $(basename "$file")"
+            ((i++))
+        done
+        echo "----------------------------------------"
+        read -p "Select kernel # (Default 1): " selection
+        echo ""
+        [ -z "$selection" ] && selection=1
+
+        if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le "$NUM_FILES" ]; then
+            CU_FILE_SELECTED=$(basename "${CU_FILES[$((selection-1))]}")
+        else
+            echo "Invalid selection."
+            exit 1
+        fi
+    fi
+else
+    CU_FILE_SELECTED="(CPU only)"
 fi
 
 # ==========================================
@@ -230,10 +255,14 @@ else
     SEQ_CPU=0
 fi
 
+if [ "$ONLY_CPU" -eq 1 ]; then
+    CU_FILE_SELECTED=""
+fi
+
 if [ "$DEBUG_MODE" -eq 1 ]; then
-    make -C src debug CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
+    make -C src debug CPU_MODE="$CPU_MODE" ONLY_CPU="$ONLY_CPU" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
 else
-    make -C src CPU_MODE="$CPU_MODE" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
+    make -C src CPU_MODE="$CPU_MODE" ONLY_CPU="$ONLY_CPU" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
 fi
 
 if [ $? -ne 0 ]; then
