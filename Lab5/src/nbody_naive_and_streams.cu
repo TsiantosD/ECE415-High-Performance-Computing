@@ -90,7 +90,6 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     for (int i = 0; i < num_systems; i++) {
         cudaStreamDestroy(streams[i]);
     }
-    free(streams);
 
     cleanUp();
 
@@ -100,8 +99,6 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
 void cleanUp() {
     destroy_timer();
     cudaFree(d_data);
-    for (int i = 0; i < num_systems; i++) {
-        cudaStreamCreate(&streams[i]);
-    }
+    free(streams);
     cudaDeviceReset();
 }
