@@ -28,7 +28,7 @@ usage() {
     echo "  -n, --iterations=N       Number of runs (default: 1)"
     echo "  --cpu=MODE               CPU Mode (none, seq, omp)"
     echo "  --gpu=MODE               GPU Mode (on, off)"
-    echo "  -f, --file=FILE          CUDA .cu file name (e.g. 02_nbody_cuda.cu)"
+    echo "  -f, --file=FILE|IDX      CUDA .cu file name (e.g. 2 or 02_nbody_cuda.cu)"
     echo "  -i, --input=FILE         Input file from Inputs/ directory"
     echo "  -b, --block-size=N       CUDA BLOCK_SIZE macro (default: 32)"
     echo "  -g, --gpu-max=N          GPU_MAX macro (default: 4)"
@@ -247,7 +247,7 @@ mkdir -p Outputs/
 # 4. Select Source File
 # ==========================================
 
-if [ -z "$CU_FILE_SELECTED" ] && [ "$ONLY_CPU" -eq 0 ]; then
+if [ "$ONLY_CPU" -eq 0 ]; then
     CU_FILES=()
     while IFS= read -r f; do
         CU_FILES+=("$f")
@@ -258,19 +258,55 @@ if [ -z "$CU_FILE_SELECTED" ] && [ "$ONLY_CPU" -eq 0 ]; then
         exit 1
     fi
 
-    echo "----------------------------------------"
-    echo "Available CUDA kernels:"
-    i=1
-    for f in "${CU_FILES[@]}"; do
-        echo "  [$i] $(basename "$f")"
-        ((i++))
-    done
-    echo "----------------------------------------"
-    read -p "Select kernel (Default 1): " selection
-    echo ""
+    # 4.2 Check if user provided an index via flag (e.g. -f 1)
+    if [[ "$CU_FILE_SELECTED" =~ ^[0-9]+$ ]]; then
+        # Convert user index (1-based) to array index (0-based)
+        IDX=$((CU_FILE_SELECTED - 1))
+        
+        # Validate range
+        if [ "$IDX" -ge 0 ] && [ "$IDX" -lt "${#CU_FILES[@]}" ]; then
+            CU_FILE_SELECTED="$(basename "${CU_FILES[${IDX}]}")"
+            echo "Selected CUDA File via index: $CU_FILE_SELECTED"
+        else
+            echo "Error: Invalid CUDA file index '$CU_FILE_SELECTED'."
+            echo "Available files:"
+            i=1
+            for f in "${CU_FILES[@]}"; do
+                echo "  [$i] $(basename "$f")"
+                ((i++))
+            done
+            exit 1
+        fi
 
-    [ -z "$selection" ] && selection=1
-    CU_FILE_SELECTED="$(basename "${CU_FILES[$((selection-1))]}")"
+    # 4.3 If no flag provided, run Interactive Mode
+    elif [ -z "$CU_FILE_SELECTED" ]; then
+        echo "----------------------------------------"
+        echo "Available CUDA kernels:"
+        i=1
+        for f in "${CU_FILES[@]}"; do
+            echo "  [$i] $(basename "$f")"
+            ((i++))
+        done
+        echo "----------------------------------------"
+        read -p "Select kernel (Default 1): " selection
+        echo ""
+
+        [ -z "$selection" ] && selection=1
+        
+        # Verify input is numeric
+        if [[ "$selection" =~ ^[0-9]+$ ]]; then
+            IDX=$((selection - 1))
+            if [ "$IDX" -ge 0 ] && [ "$IDX" -lt "${#CU_FILES[@]}" ]; then
+                CU_FILE_SELECTED="$(basename "${CU_FILES[$IDX]}")"
+            else
+                echo "Invalid selection index."
+                exit 1
+            fi
+        else
+            echo "Invalid selection input."
+            exit 1
+        fi
+    fi
 fi
 
 # ==========================================
