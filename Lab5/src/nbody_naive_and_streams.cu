@@ -54,6 +54,7 @@ __global__ void integrateKernel(Body *p, float dt, int n) {
 }
 
 Body *d_data;
+cudaStream_t *streams;
 
 double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, const float dt, Body *h_data) {
     int total_bodies = num_systems * bodies_per_system;
@@ -64,6 +65,9 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     start_timer();
     cudaMalloc((void**)&d_data, data_size);
     CUDA_CHECK_LAST_ERROR();
+
+    streams = (cudaStream_t *)malloc(num_systems * sizeof(cudaStream_t));
+
     cudaMemcpy(d_data, h_data, data_size, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
 
@@ -73,14 +77,20 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     for (iter = 1; iter <= nIters; iter++) {
         for (sys = 0; sys < num_systems; sys++) {
 	    system_ptr = &d_data[sys * bodies_per_system];
-            bodyForceKernel<<<gridSize, BLOCK_SIZE>>>(system_ptr, dt, bodies_per_system);
-            integrateKernel<<<gridSize, BLOCK_SIZE>>>(system_ptr, dt, bodies_per_system);
+            bodyForceKernel<<<gridSize, BLOCK_SIZE, 0, streams[sys]>>>(system_ptr, dt, bodies_per_system);
+            integrateKernel<<<gridSize, BLOCK_SIZE, 0, streams[sys]>>>(system_ptr, dt, bodies_per_system);
         }
     }
+    cudaDeviceSynchronize();
     cudaMemcpy(h_data, d_data, data_size, cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
     stop_timer();
     time = (double) get_timer_ms() / 1000.0f;
+
+    for (int i = 0; i < num_systems; i++) {
+        cudaStreamDestroy(streams[i]);
+    }
+    free(streams);
 
     cleanUp();
 
@@ -90,4 +100,7 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
 void cleanUp() {
     destroy_timer();
     cudaFree(d_data);
+    for (int i = 0; i < num_systems; i++) {
+        cudaStreamCreate(&streams[i]);
+    }
 }
