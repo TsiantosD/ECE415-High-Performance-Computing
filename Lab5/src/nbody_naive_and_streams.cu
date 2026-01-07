@@ -103,4 +103,5 @@ void cleanUp() {
     for (int i = 0; i < num_systems; i++) {
         cudaStreamCreate(&streams[i]);
     }
+    cudaDeviceReset();
 }

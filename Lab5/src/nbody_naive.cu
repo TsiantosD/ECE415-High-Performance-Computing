@@ -90,4 +90,5 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
 void cleanUp() {
     destroy_timer();
     cudaFree(d_data);
+    cudaDeviceReset();
 }
