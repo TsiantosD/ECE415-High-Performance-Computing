@@ -9,9 +9,13 @@ CU_FILE_SELECTED=""
 INPUT_ARG=""
 BLOCK_SIZE=32
 GPU_MAX=4
-CPU_MODE="omp"
 DEBUG_MODE=0  # 0 = Release (Default), 1 = Debug
+
+SEL_CPU_MODE=0
+SEL_GPU_MODE=0
+
 ONLY_CPU=0
+CPU_COMPILER_FLAG="seq"
 
 # ==========================================
 # Help / Usage Function
@@ -22,14 +26,13 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -n, --iterations=N       Number of runs (default: 1)"
-    echo "  -c, --check-output=VAL   Value for CHECK_OUTPUT macro (default: 1)"
+    echo "  --cpu=MODE               CPU Mode (none, seq, omp)"
+    echo "  --gpu=MODE               GPU Mode (on, off)"
     echo "  -f, --file=FILE|INDEX    CUDA .cu file name or index (e.g. 02_nbody_cuda.cu or 2)"
     echo "  -i, --input=FILE         Input file from Inputs/ directory"
     echo "  -b, --block-size=N       CUDA BLOCK_SIZE macro (default: 32)"
     echo "  -g, --gpu-max=N          GPU_MAX macro (default: 4)"
-    echo "  -s, --sequential         Run CPU version sequentially (disable OpenMP)"
     echo "  -d, --debug              Compile in DEBUG mode"
-    echo "  -o, --only-cpu           Run CPU version only (no GPU)"
     echo "  -h, --help               Show this help message and exit"
     echo ""
     echo "Examples:"
@@ -42,8 +45,8 @@ usage() {
 # 1. Parse Flags
 # ==========================================
 PARSED_OPTS=$(getopt \
-    -o n:c:f:i:b:g:sdoh \
-    --long iterations:,check-output:,file:,input:,block-size:,gpu-max:,sequential,debug,only-cpu,help \
+    -o n:f:i:b:g:dh \
+    --long iterations:,cpu:,gpu:,file:,input:,block-size:,gpu-max:,debug,help \
     -n "$0" -- "$@")
 
 if [ $? -ne 0 ]; then
@@ -56,8 +59,21 @@ while true; do
     case "$1" in
         -n|--iterations)
             ITERATIONS="$2"; shift 2 ;;
-        -c|--check-output)
-            CHECK_OUTPUT_VAL="$2"; shift 2 ;;
+        --cpu)
+            case "$2" in
+                none) SEL_CPU_MODE=1 ;;
+                seq)  SEL_CPU_MODE=2 ;;
+                omp)  SEL_CPU_MODE=3 ;;
+                *) echo "Invalid CPU mode: $2"; exit 1 ;;
+            esac
+            shift 2 ;;
+        --gpu)
+             case "$2" in
+                on)  SEL_GPU_MODE=1 ;;
+                off) SEL_GPU_MODE=2 ;;
+                *) echo "Invalid GPU mode: $2"; exit 1 ;;
+            esac
+            shift 2 ;;
         -f|--file)
             CU_FILE_SELECTED="$2"; shift 2 ;;
         -i|--input)
@@ -66,12 +82,8 @@ while true; do
             BLOCK_SIZE="$2"; shift 2 ;;
         -g|--gpu-max)
             GPU_MAX="$2"; shift 2 ;;
-        -s|--sequential)
-            CPU_MODE="seq"; shift ;;
         -d|--debug)
             DEBUG_MODE=1; shift ;;
-        -o|--only-cpu)
-            ONLY_CPU=1; shift ;;
         -h|--help)
             usage ;;
         --)
@@ -82,7 +94,7 @@ while true; do
 done
 
 # ==========================================
-# 1.1 Validate Integers
+# 2. Interactive Selection
 # ==========================================
 
 # Check ITERATIONS (Must be a positive integer >= 1)
@@ -91,18 +103,78 @@ if ! [[ "$ITERATIONS" =~ ^[0-9]+$ ]] || [ "$ITERATIONS" -lt 1 ]; then
     exit 1
 fi
 
-# Check CHECK_OUTPUT_VAL (Must be an integer, 0 or 1 usually, or just any int)
-# The regex ^-?[0-9]+$ allows for negative numbers if your logic supports them.
-# If it must be strictly 0 or 1: regex is ^[01]$
-if ! [[ "$CHECK_OUTPUT_VAL" =~ ^-?[0-9]+$ ]]; then
-    echo "Error: Check Output Value (-c) must be an integer. Received: '$CHECK_OUTPUT_VAL'"
+
+# 2.1 Select CPU Mode
+if [ "$SEL_CPU_MODE" -eq 0 ]; then
+    echo "----------------------------------------"
+    echo "Select CPU Mode:"
+    echo "  [1] None"
+    echo "  [2] Sequential"
+    echo "  [3] OpenMP"
+    echo "----------------------------------------"
+    read -p "Choice (Default 3): " choice
+    [ -z "$choice" ] && choice=3
+    SEL_CPU_MODE=$choice
+fi
+
+# 2.2 Select GPU Mode
+if [ "$SEL_GPU_MODE" -eq 0 ]; then
+    echo ""
+    echo "----------------------------------------"
+    echo "Select GPU Mode:"
+    echo "  [1] On"
+    echo "  [2] Off"
+    echo "----------------------------------------"
+    read -p "Choice (Default 1): " choice
+    [ -z "$choice" ] && choice=1
+    SEL_GPU_MODE=$choice
+fi
+
+# ==========================================
+# 3. Logic Validation & Compilation Setup
+# ==========================================
+
+# Check Invalid Combo: CPU None + GPU Off
+if [ "$SEL_CPU_MODE" -eq 1 ] && [ "$SEL_GPU_MODE" -eq 2 ]; then
+    echo ""
+    echo "ERROR: You cannot select CPU: None and GPU: Off."
+    echo "       At least one computational unit must be active."
     exit 1
+fi
+
+# -- Configure Compilation Variables based on User Choice --
+
+# Handle CPU Choices
+if [ "$SEL_CPU_MODE" -eq 1 ]; then
+    # CPU: None
+    CPU_COMPILER_FLAG="seq" # Default compiler flag (needed for host code)
+    CHECK_OUTPUT_VAL=0      # Force disable check (nothing to compare against)
+    echo ">> CPU set to None: Disabling Output Check (CHECK_OUTPUT=0)."
+elif [ "$SEL_CPU_MODE" -eq 2 ]; then
+    # CPU: Sequential
+    CPU_COMPILER_FLAG="seq"
+elif [ "$SEL_CPU_MODE" -eq 3 ]; then
+    # CPU: OpenMP
+    CPU_COMPILER_FLAG="omp"
+else
+    echo "Invalid CPU selection."
+    exit 1
+fi
+
+# Handle GPU Choices
+if [ "$SEL_GPU_MODE" -eq 1 ]; then
+    # GPU: On
+    ONLY_CPU=0
+else
+    # GPU: Off
+    ONLY_CPU=1
 fi
 
 # ==========================================
 # 2. Select input (If not specified via flag)
 # ==========================================
 if [ -z "$INPUT_ARG" ]; then
+    echo ""
     echo "No input specified. Searching in 'Inputs/'..."
     
     # Check if directory exists
@@ -172,118 +244,34 @@ OUTPUT_PATH="Outputs/${BASENAME}_out.${EXTENSION}"
 mkdir -p Outputs/
 
 # ==========================================
-# 4. Select Execution Mode & Source File
+# 4. Select Source File
 # ==========================================
 
 if [ -z "$CU_FILE_SELECTED" ] && [ "$ONLY_CPU" -eq 0 ]; then
-    echo "Select execution mode:"
-    echo "  [1] CPU Sequential"
-    echo "  [2] CPU OpenMP"
-    echo "  [3] GPU"
-    echo "  [4] GPU + OpenMP"
+    CU_FILES=()
+    while IFS= read -r f; do
+        CU_FILES+=("$f")
+    done < <(find src -maxdepth 1 -name "*.cu" | sort)
+
+    if [ ${#CU_FILES[@]} -eq 0 ]; then
+        echo "No CUDA files found."
+        exit 1
+    fi
+
     echo "----------------------------------------"
-    read -p "Choice (Default 3): " mode_choice
+    echo "Available CUDA kernels:"
+    i=1
+    for f in "${CU_FILES[@]}"; do
+        echo "  [$i] $(basename "$f")"
+        ((i++))
+    done
+    echo "----------------------------------------"
+    read -p "Select kernel (Default 1): " selection
     echo ""
 
-    [ -z "$mode_choice" ] && mode_choice=3
-
-    case "$mode_choice" in
-        1)
-            ONLY_CPU=1
-            CPU_MODE="seq"
-            FILE_PATTERN="*.c"
-            EXCLUDE_PATTERN="_omp.c"
-            EXCLUDE_FILES=("main.c" "results_check.c")
-            ;;
-        2)
-            ONLY_CPU=1
-            CPU_MODE="omp"
-            FILE_PATTERN="*_omp.c"
-            EXCLUDE_FILES=()
-            ;;
-        3)
-            ONLY_CPU=0
-            CPU_MODE="seq"
-            FILE_PATTERN="*.cu"
-            EXCLUDE_FILES=()
-            ;;
-        4)
-            ONLY_CPU=0
-            CPU_MODE="omp"
-            FILE_PATTERN="*.cu"
-            EXCLUDE_FILES=()
-            ;;
-        *)
-            echo "Invalid selection."
-            exit 1
-            ;;
-    esac
-
-    if [ "$ONLY_CPU" -eq 1 ]; then
-        SRC_FILES=()
-        while IFS= read -r f; do
-            fname=$(basename "$f")
-            skip=0
-            # Exclude specified files
-            for excl in "${EXCLUDE_FILES[@]}"; do
-                if [ "$fname" == "$excl" ]; then
-                    skip=1
-                    break
-                fi
-            done
-            # Exclude pattern (_omp.c) if needed
-            if [ -n "${EXCLUDE_PATTERN:-}" ] && [[ "$fname" =~ $EXCLUDE_PATTERN ]]; then
-                skip=1
-            fi
-            [ $skip -eq 0 ] && SRC_FILES+=("$f")
-        done < <(find src -maxdepth 1 -name "$FILE_PATTERN")
-
-        if [ ${#SRC_FILES[@]} -eq 0 ]; then
-            echo "No matching CPU source files found."
-            exit 1
-        fi
-
-        echo "----------------------------------------"
-        echo "Available CPU sources:"
-        i=1
-        for f in "${SRC_FILES[@]}"; do
-            echo "  [$i] $(basename "$f")"
-            ((i++))
-        done
-        echo "----------------------------------------"
-        read -p "Select file (Default 1): " selection
-        echo ""
-
-        [ -z "$selection" ] && selection=1
-        CU_FILE_SELECTED="$(basename "${SRC_FILES[$((selection-1))]}")"
-
-    else
-        CU_FILES=()
-        while IFS= read -r f; do
-            CU_FILES+=("$f")
-        done < <(find src -maxdepth 1 -name "*.cu" | sort)
-
-        if [ ${#CU_FILES[@]} -eq 0 ]; then
-            echo "No CUDA files found."
-            exit 1
-        fi
-
-        echo "----------------------------------------"
-        echo "Available CUDA kernels:"
-        i=1
-        for f in "${CU_FILES[@]}"; do
-            echo "  [$i] $(basename "$f")"
-            ((i++))
-        done
-        echo "----------------------------------------"
-        read -p "Select kernel (Default 1): " selection
-        echo ""
-
-        [ -z "$selection" ] && selection=1
-        CU_FILE_SELECTED="$(basename "${CU_FILES[$((selection-1))]}")"
-    fi
+    [ -z "$selection" ] && selection=1
+    CU_FILE_SELECTED="$(basename "${CU_FILES[$((selection-1))]}")"
 fi
-
 
 # ==========================================
 # 5. Compile
@@ -292,12 +280,12 @@ echo "========================================"
 echo " Configuration Summary"
 echo "========================================"
 echo " Mode:          $([ "$DEBUG_MODE" -eq 1 ] && echo "DEBUG" || echo "RELEASE")"
-echo " CPU Mode:      $CPU_MODE"
+echo " CPU Mode:      $SEL_CPU_MODE"
+echo " GPU Mode:      $SEL_GPU_MODE"
+echo ""
 echo " Input:         $INPUT_ARG"
 echo " CUDA Kernel:   $CU_FILE_SELECTED"
 echo " Iterations:    $ITERATIONS"
-echo " Check Output:  $CHECK_OUTPUT_VAL"
-echo " Only CPU:  $ONLY_CPU"
 echo "========================================"
 echo "Compiling..."
 
@@ -305,20 +293,26 @@ echo "Compiling..."
 make -C src clean CUDA_SRC="$CU_FILE_SELECTED" > /dev/null
 
 # Construct Flags
-if [ "$CPU_MODE" == "seq" ]; then
+if [ "$CPU_COMPILER_FLAG" == "seq" ]; then
     SEQ_CPU=1
 else
     SEQ_CPU=0
 fi
 
+# --- FIX: Use a separate variable for compilation vs logging ---
+MAKE_CUDA_SRC="$CU_FILE_SELECTED"
 if [ "$ONLY_CPU" -eq 1 ]; then
-    CU_FILE_SELECTED=""
+    MAKE_CUDA_SRC="" # Pass empty to makefile if GPU is off
 fi
 
+make -C src clean CUDA_SRC="$MAKE_CUDA_SRC" > /dev/null
+
+FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
+
 if [ "$DEBUG_MODE" -eq 1 ]; then
-    make -C src debug CPU_MODE="$CPU_MODE" ONLY_CPU="$ONLY_CPU" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
+    make -C src debug CPU_MODE="$CPU_COMPILER_FLAG" ONLY_CPU="$ONLY_CPU" CUDA_SRC="$MAKE_CUDA_SRC" USER_FLAGS="$FLAGS"
 else
-    make -C src CPU_MODE="$CPU_MODE" ONLY_CPU="$ONLY_CPU" CUDA_SRC="$CU_FILE_SELECTED" USER_FLAGS="-DCHECK_OUTPUT=$CHECK_OUTPUT_VAL -DONLY_CPU=$ONLY_CPU -DSEQ_CPU=$SEQ_CPU -DBLOCK_SIZE=$BLOCK_SIZE -DGPU_MAX=$GPU_MAX"
+    make -C src CPU_MODE="$CPU_COMPILER_FLAG" ONLY_CPU="$ONLY_CPU" CUDA_SRC="$MAKE_CUDA_SRC" USER_FLAGS="$FLAGS"
 fi
 
 if [ $? -ne 0 ]; then
