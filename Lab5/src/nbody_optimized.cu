@@ -23,8 +23,9 @@ typedef struct {
 GalaxySoA systemsHost;
 GalaxySoA systemsDevice[GPU_MAX];
 
-__global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt, int system_idx) {
+__global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
     //! Find system and position of threads in a range of [0, BLOCK_SIZE] 
+    int system_idx = blockIdx.y; 
     int body_local_idx = blockIdx.x * blockDim.x + threadIdx.x;
     int system_offset = system_idx * bodies_per_system;
     
@@ -93,8 +94,9 @@ __global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system,
     galaxy.vz[global_idx] = my_vz + dt * Fz;
 }
 
-__global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_system, float dt, int system_idx) {
+__global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
     //! Same indexing as forces kernel
+    int system_idx = blockIdx.y; 
     int body_local_idx = blockIdx.x * blockDim.x + threadIdx.x;
     int system_offset = system_idx * bodies_per_system;
     
@@ -194,56 +196,52 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
         int bytes = my_system_count * bodies_per_system * sizeof(float);
         
         if (my_system_count > 0) {
+            
+            //! Allocate cuda memory for kernel calls for this' gpu workload
             cudaMalloc(&(systemsDevice[gpu_id].x), bytes);
+            CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].y), bytes);
+            CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].z), bytes);
+            CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].vx), bytes);
+            CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].vy), bytes);
+            CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].vz), bytes);
+            CUDA_CHECK_LAST_ERROR();
 
             cudaMemcpy(systemsDevice[gpu_id].x, &(systemsHost.x[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
+            CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].y, &(systemsHost.y[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
+            CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].z, &(systemsHost.z[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
+            CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].vx, &(systemsHost.vx[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
+            CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].vy, &(systemsHost.vy[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
+            CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].vz, &(systemsHost.vz[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
-
-            // Create a stream for each system
-            cudaStream_t *streams = (cudaStream_t *)malloc(my_system_count * sizeof(cudaStream_t));
-            for (int s = 0; s < my_system_count; s++) {
-                cudaStreamCreate(&streams[s]);
-            }
-
+            CUDA_CHECK_LAST_ERROR();
+            
             dim3 threads(BLOCK_SIZE);
-            // grid.y is one beacause a stream handles one galaxy
-            dim3 grid((bodies_per_system + BLOCK_SIZE - 1) / BLOCK_SIZE, 1);
+            dim3 grid((bodies_per_system + BLOCK_SIZE - 1) / BLOCK_SIZE, my_system_count);
 
             for (int iter = 0; iter < nIters; iter++) {
-                for (int s = 0; s < my_system_count; s++) {
-                    calculate_forces_kernel<<<grid, threads, 0, streams[s]>>>(
-                        systemsDevice[gpu_id],
-                        bodies_per_system, 
-                        dt,
-                        s
-                    );
-                }
+                calculate_forces_kernel<<<grid, threads>>>(
+                    systemsDevice[gpu_id],
+                    bodies_per_system, 
+                    dt
+                );
+                
+                //TODO sync if we add streams
 
-                for (int s = 0; s < my_system_count; s++) {
-                    integrate_positions_kernel<<<grid, threads, 0, streams[s]>>>(
-                        systemsDevice[gpu_id],
-                        bodies_per_system, 
-                        dt,
-                        s
-                    );
-                }
+                integrate_positions_kernel<<<grid, threads>>>(
+                    systemsDevice[gpu_id],
+                    bodies_per_system, 
+                    dt
+                );
             }
-
-            cudaDeviceSynchronize();
-
-            for (int s = 0; s < my_system_count; s++) {
-                cudaStreamDestroy(streams[s]);
-            }
-            free(streams);
             
             cudaDeviceSynchronize();
             CUDA_CHECK_LAST_ERROR();
