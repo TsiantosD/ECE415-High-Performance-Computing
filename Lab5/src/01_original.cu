@@ -72,7 +72,7 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     int gridSize = (bodies_per_system + BLOCK_SIZE - 1) / BLOCK_SIZE;
     for (iter = 1; iter <= nIters; iter++) {
         for (sys = 0; sys < num_systems; sys++) {
-	    system_ptr = &d_data[sys * bodies_per_system];
+	        system_ptr = &d_data[sys * bodies_per_system];
             bodyForceKernel<<<gridSize, BLOCK_SIZE>>>(system_ptr, dt, bodies_per_system);
             integrateKernel<<<gridSize, BLOCK_SIZE>>>(system_ptr, dt, bodies_per_system);
         }

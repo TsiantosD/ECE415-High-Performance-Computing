@@ -28,7 +28,7 @@ usage() {
     echo "  -n, --iterations=N       Number of runs (default: 1)"
     echo "  --cpu=MODE               CPU Mode (none, seq, omp)"
     echo "  --gpu=MODE               GPU Mode (on, off)"
-    echo "  -f, --file=FILE|INDEX    CUDA .cu file name or index (e.g. 02_nbody_cuda.cu or 2)"
+    echo "  -f, --file=FILE          CUDA .cu file name (e.g. 02_nbody_cuda.cu)"
     echo "  -i, --input=FILE         Input file from Inputs/ directory"
     echo "  -b, --block-size=N       CUDA BLOCK_SIZE macro (default: 32)"
     echo "  -g, --gpu-max=N          GPU_MAX macro (default: 4)"
