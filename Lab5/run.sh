@@ -276,12 +276,25 @@ fi
 # ==========================================
 # 5. Compile
 # ==========================================
+case "$SEL_CPU_MODE" in
+    1) CPU_DESC="None (No Host Calculation)" ;;
+    2) CPU_DESC="Sequential" ;;
+    3) CPU_DESC="OpenMP (Parallel)" ;;
+    *) CPU_DESC="Unknown ($SEL_CPU_MODE)" ;;
+esac
+
+case "$SEL_GPU_MODE" in
+    1) GPU_DESC="On (CUDA Enabled)" ;;
+    2) GPU_DESC="Off (CPU Only)" ;;
+    *) GPU_DESC="Unknown ($SEL_GPU_MODE)" ;;
+esac
+
 echo "========================================"
 echo " Configuration Summary"
 echo "========================================"
 echo " Mode:          $([ "$DEBUG_MODE" -eq 1 ] && echo "DEBUG" || echo "RELEASE")"
-echo " CPU Mode:      $SEL_CPU_MODE"
-echo " GPU Mode:      $SEL_GPU_MODE"
+echo " CPU Mode:      $CPU_DESC"
+echo " GPU Mode:      $GPU_DESC"
 echo ""
 echo " Input:         $INPUT_ARG"
 echo " CUDA Kernel:   $CU_FILE_SELECTED"
