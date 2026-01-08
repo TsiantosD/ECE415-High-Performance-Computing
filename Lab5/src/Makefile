@@ -7,11 +7,12 @@ NVCC = nvcc
 
 # Common optimization flags for CPU (GCC)
 COMMON_FLAGS = -Wall -O3 -fopenmp -ffast-math -lm
-
+LDFLAGS = -lnvToolsExt
 # CUDA flags
 # -Xcompiler passes flags to the host compiler (gcc). 
 # We pass -fopenmp so the host side of the CUDA code can spawn threads.
 # --use_fast_math is the CUDA equivalent of -ffast-math
+# useful --ptxas-options=-v 
 NVCC_FLAGS = -O3 --use_fast_math -Xcompiler -fopenmp
 
 # Mode for main target
@@ -73,7 +74,7 @@ debug: $(MAIN_EXE) $(RESULTS_CHECK_EXE)
 # ================== MAIN TARGET ==================
 
 $(MAIN_EXE): $(MAIN_OBJ) $(CHOSEN_CPU_OBJ) $(CUDA_OBJ)
-	$(LINKER) $(LINK_FLAGS) $^ -o $@
+	$(LINKER) $(LINK_FLAGS) $^ -o $@ $(LDFLAGS)
 
 $(MAIN_OBJ): $(MAIN_SRC)
 	$(CC) $(COMMON_FLAGS) -c $< -o $@
