@@ -18,7 +18,6 @@ void destroy_timer() {
 
 void start_timer() {
     cudaEventRecord(start);
-    CUDA_CHECK_LAST_ERROR();
 }
 
 void stop_timer() {
