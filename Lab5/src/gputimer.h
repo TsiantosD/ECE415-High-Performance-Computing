@@ -1,32 +1,38 @@
 #ifndef GPUTIMER_H
 #define GPUTIMER_H
 #include "helpers.h"
-#include <chrono>
 
-static std::chrono::time_point<std::chrono::high_resolution_clock> start_cpu, stop_cpu;
+static cudaEvent_t start, stop;
 
 void create_timer() {
-
+    cudaEventCreate(&start);
+    CUDA_CHECK_LAST_ERROR();
+    cudaEventCreate(&stop);
+    CUDA_CHECK_LAST_ERROR();
 }
 
 void destroy_timer() {
-    
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
 }
 
 void start_timer() {
-    start_cpu = std::chrono::high_resolution_clock::now();
+    cudaEventRecord(start);
+    CUDA_CHECK_LAST_ERROR();
 }
 
 void stop_timer() {
-    cudaDeviceSynchronize();
+    cudaEventRecord(stop);
     CUDA_CHECK_LAST_ERROR();
-    
-    stop_cpu = std::chrono::high_resolution_clock::now();
+    cudaEventSynchronize(stop);
+    CUDA_CHECK_LAST_ERROR();
 }
 
 float get_timer_ms() {
-    std::chrono::duration<float, std::milli> duration = stop_cpu - start_cpu;
-    return duration.count();
+    float ms;
+    cudaEventElapsedTime(&ms, start, stop);
+    CUDA_CHECK_LAST_ERROR();
+    return ms;
 }
 
 #endif // TIMER_H

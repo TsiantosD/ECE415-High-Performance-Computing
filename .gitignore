@@ -2,3 +2,4 @@
 .idea
 cudaTesting
 *.nsys-rep
+*.ncu-rep
