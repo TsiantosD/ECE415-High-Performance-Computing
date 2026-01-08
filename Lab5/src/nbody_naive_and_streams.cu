@@ -67,6 +67,9 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     CUDA_CHECK_LAST_ERROR();
 
     streams = (cudaStream_t *)malloc(num_systems * sizeof(cudaStream_t));
+    for (int i = 0; i < num_systems; i++) {
+        cudaStreamCreate(&streams[i]);
+    }
 
     cudaMemcpy(d_data, h_data, data_size, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
