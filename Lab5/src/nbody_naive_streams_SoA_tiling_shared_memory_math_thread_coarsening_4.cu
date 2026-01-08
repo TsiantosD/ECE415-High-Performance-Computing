@@ -1,12 +1,11 @@
 #include "helpers.h"
 #include "gputimer.h"
 
-#define COARSENING 2
-
 #ifndef BLOCK_SIZE
 #define BLOCK_SIZE 32
 #endif
 
+#define COARSENING 4
 
 typedef struct {
     float *x, *y, *z;
@@ -18,80 +17,63 @@ typedef struct {
     - time step
     - number of bodies
 */
-__global__ void __launch_bounds__(BLOCK_SIZE, 2) bodyForceKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
-    int i1 = (blockIdx.x * COARSENING) * blockDim.x + threadIdx.x;
-    int i2 = i1 + blockDim.x; 
+__global__ void bodyForceKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
     int system_offset = sys_idx * n;
+    
+    float myX[COARSENING], myY[COARSENING], myZ[COARSENING];
+    float Fx[COARSENING], Fy[COARSENING], Fz[COARSENING];
 
-    float myX1 = 0, myY1 = 0, myZ1 = 0;
-    float myX2 = 0, myY2 = 0, myZ2 = 0;
-    float Fx1 = 0.0f, Fy1 = 0.0f, Fz1 = 0.0f;
-    float Fx2 = 0.0f, Fy2 = 0.0f, Fz2 = 0.0f;
-
-    if (i1 < n) {
-        myX1 = __ldg(&soa.x[system_offset + i1]);
-        myY1 = __ldg(&soa.y[system_offset + i1]);
-        myZ1 = __ldg(&soa.z[system_offset + i1]);
+    #pragma unroll
+    for (int c = 0; c < COARSENING; c++) {
+        int idx = (blockIdx.x * COARSENING + c) * blockDim.x + threadIdx.x;
+        Fx[c] = 0.0f; Fy[c] = 0.0f; Fz[c] = 0.0f;
+        
+        if (idx < n) {
+            myX[c] = __ldg(&soa.x[system_offset + idx]);
+            myY[c] = __ldg(&soa.y[system_offset + idx]);
+            myZ[c] = __ldg(&soa.z[system_offset + idx]);
+        }
     }
-    if (i2 < n) {
-        myX2 = __ldg(&soa.x[system_offset + i2]);
-        myY2 = __ldg(&soa.y[system_offset + i2]);
-        myZ2 = __ldg(&soa.z[system_offset + i2]);
-    }
 
-    __shared__ float shX[BLOCK_SIZE];
-    __shared__ float shY[BLOCK_SIZE];
-    __shared__ float shZ[BLOCK_SIZE];
+    __shared__ float shX[BLOCK_SIZE], shY[BLOCK_SIZE], shZ[BLOCK_SIZE];
 
-    int num_tiles = (n + BLOCK_SIZE - 1) / BLOCK_SIZE; 
-
+    int num_tiles = n / BLOCK_SIZE;
     for (int tile = 0; tile < num_tiles; tile++) {
         int j_local = threadIdx.x;
-        int j_global = tile * BLOCK_SIZE + j_local;
-
-        if (j_global < n) {
-            shX[j_local] = __ldg(&soa.x[system_offset + j_global]);
-            shY[j_local] = __ldg(&soa.y[system_offset + j_global]);
-            shZ[j_local] = __ldg(&soa.z[system_offset + j_global]);
-        } else {
-            shX[j_local] = 0.0f;
-            shY[j_local] = 0.0f;
-            shZ[j_local] = 0.0f;
-        }
+        shX[j_local] = __ldg(&soa.x[system_offset + tile * BLOCK_SIZE + j_local]);
+        shY[j_local] = __ldg(&soa.y[system_offset + tile * BLOCK_SIZE + j_local]);
+        shZ[j_local] = __ldg(&soa.z[system_offset + tile * BLOCK_SIZE + j_local]);
 
         __syncthreads();
 
-        if (i1 < n) {
+        #pragma unroll
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            float jX = shX[j]; float jY = shY[j]; float jZ = shZ[j];
+            
             #pragma unroll
-            for (int j = 0; j < BLOCK_SIZE; j++) {
-                float dx = shX[j] - myX1; float dy = shY[j] - myY1; float dz = shZ[j] - myZ1;
+            for (int c = 0; c < COARSENING; c++) {
+                float dx = jX - myX[c];
+                float dy = jY - myY[c];
+                float dz = jZ - myZ[c];
                 float distSqr = fmaf(dx, dx, fmaf(dy, dy, fmaf(dz, dz, SOFTENING)));
-                float invDist = rsqrtf(distSqr); float invDist3 = invDist * invDist * invDist;
-                Fx1 = fmaf(dx, invDist3, Fx1); Fy1 = fmaf(dy, invDist3, Fy1); Fz1 = fmaf(dz, invDist3, Fz1);
-            }
-        }
-
-        if (i2 < n) {
-            #pragma unroll
-            for (int j = 0; j < BLOCK_SIZE; j++) {
-                float dx = shX[j] - myX2; float dy = shY[j] - myY2; float dz = shZ[j] - myZ2;
-                float distSqr = fmaf(dx, dx, fmaf(dy, dy, fmaf(dz, dz, SOFTENING)));
-                float invDist = rsqrtf(distSqr); float invDist3 = invDist * invDist * invDist;
-                Fx2 = fmaf(dx, invDist3, Fx2); Fy2 = fmaf(dy, invDist3, Fy2); Fz2 = fmaf(dz, invDist3, Fz2);
+                float invDist = rsqrtf(distSqr);
+                float invDist3 = invDist * invDist * invDist;
+                Fx[c] = fmaf(dx, invDist3, Fx[c]);
+                Fy[c] = fmaf(dy, invDist3, Fy[c]);
+                Fz[c] = fmaf(dz, invDist3, Fz[c]);
             }
         }
         __syncthreads();
     }
 
-    if (i1 < n) {
-        soa.vx[system_offset + i1] += dt * Fx1;
-        soa.vy[system_offset + i1] += dt * Fy1;
-        soa.vz[system_offset + i1] += dt * Fz1;
-    }
-    if (i2 < n) {
-        soa.vx[system_offset + i2] += dt * Fx2;
-        soa.vy[system_offset + i2] += dt * Fy2;
-        soa.vz[system_offset + i2] += dt * Fz2;
+    #pragma unroll
+    for (int c = 0; c < COARSENING; c++) {
+        int idx = (blockIdx.x * COARSENING + c) * blockDim.x + threadIdx.x;
+        if (idx < n) {
+            soa.vx[system_offset + idx] += dt * Fx[c];
+            soa.vy[system_offset + idx] += dt * Fy[c];
+            soa.vz[system_offset + idx] += dt * Fz[c];
+        }
     }
 }
 

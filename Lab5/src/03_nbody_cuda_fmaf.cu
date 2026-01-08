@@ -23,7 +23,7 @@ typedef struct {
 GalaxySoA systemsHost;
 GalaxySoA systemsDevice[GPU_MAX];
 
-__global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
+__global__ void __launch_bounds__(BLOCK_SIZE, 2) calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
     //! Find system and position of threads in a range of [0, BLOCK_SIZE] 
     int system_idx = blockIdx.y; 
     int body_local_idx = blockIdx.x * blockDim.x + threadIdx.x;
