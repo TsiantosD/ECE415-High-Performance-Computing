@@ -72,13 +72,13 @@ bodyForceKernel(GalaxySoA soa, float dt, int n_padded, int sys_idx) {
         __syncthreads();
     }
 
-    soa.vx[system_offset + i1] += dt * Fx1;
-    soa.vy[system_offset + i1] += dt * Fy1;
-    soa.vz[system_offset + i1] += dt * Fz1;
+    soa.vx[system_offset + i1] = fmaf(dt, Fx1, soa.vx[system_offset + i1]);
+    soa.vy[system_offset + i1] = fmaf(dt, Fy1, soa.vy[system_offset + i1]);
+    soa.vz[system_offset + i1] = fmaf(dt, Fz1, soa.vz[system_offset + i1]);
 
-    soa.vx[system_offset + i2] += dt * Fx2;
-    soa.vy[system_offset + i2] += dt * Fy2;
-    soa.vz[system_offset + i2] += dt * Fz2;
+    soa.vx[system_offset + i2] = fmaf(dt, Fx2, soa.vx[system_offset + i2]);
+    soa.vy[system_offset + i2] = fmaf(dt, Fy2, soa.vy[system_offset + i2]);
+    soa.vz[system_offset + i2] = fmaf(dt, Fz2, soa.vz[system_offset + i2]);
 }
 
 /* Integrate positions.
