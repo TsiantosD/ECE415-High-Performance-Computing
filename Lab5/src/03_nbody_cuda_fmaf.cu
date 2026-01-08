@@ -111,32 +111,28 @@ __global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_syst
 void cleanUp(void) {
     #pragma omp critical
     {
-        static int is_cleaned = 0;
-        
-        if (is_cleaned == 0) {
-            if (systemsHost.x) { free(systemsHost.x); systemsHost.x = NULL; }
-            if (systemsHost.y) { free(systemsHost.y); systemsHost.y = NULL; }
-            if (systemsHost.z) { free(systemsHost.z); systemsHost.z = NULL; }
-            if (systemsHost.vx) { free(systemsHost.vx); systemsHost.vx = NULL; }
-            if (systemsHost.vy) { free(systemsHost.vy); systemsHost.vy = NULL; }
-            if (systemsHost.vz) { free(systemsHost.vz); systemsHost.vz = NULL; }
+        destroy_timer();
+    
+        if (systemsHost.x) { free(systemsHost.x); systemsHost.x = NULL; }
+        if (systemsHost.y) { free(systemsHost.y); systemsHost.y = NULL; }
+        if (systemsHost.z) { free(systemsHost.z); systemsHost.z = NULL; }
+        if (systemsHost.vx) { free(systemsHost.vx); systemsHost.vx = NULL; }
+        if (systemsHost.vy) { free(systemsHost.vy); systemsHost.vy = NULL; }
+        if (systemsHost.vz) { free(systemsHost.vz); systemsHost.vz = NULL; }
 
-            for (int i = 0; i < GPU_MAX; i++) {
-                if (systemsDevice[i].x != NULL) {
-                    cudaSetDevice(i);
-                    
-                    cudaFree(systemsDevice[i].x); systemsDevice[i].x = NULL;
-                    cudaFree(systemsDevice[i].y); systemsDevice[i].y = NULL;
-                    cudaFree(systemsDevice[i].z); systemsDevice[i].z = NULL;
-                    cudaFree(systemsDevice[i].vx); systemsDevice[i].vx = NULL;
-                    cudaFree(systemsDevice[i].vy); systemsDevice[i].vy = NULL;
-                    cudaFree(systemsDevice[i].vz); systemsDevice[i].vz = NULL;
-                    
-                    cudaDeviceReset();
-                }
+        for (int i = 0; i < GPU_MAX; i++) {
+            if (systemsDevice[i].x != NULL) {
+                cudaSetDevice(i);
+                
+                cudaFree(systemsDevice[i].x); systemsDevice[i].x = NULL;
+                cudaFree(systemsDevice[i].y); systemsDevice[i].y = NULL;
+                cudaFree(systemsDevice[i].z); systemsDevice[i].z = NULL;
+                cudaFree(systemsDevice[i].vx); systemsDevice[i].vx = NULL;
+                cudaFree(systemsDevice[i].vy); systemsDevice[i].vy = NULL;
+                cudaFree(systemsDevice[i].vz); systemsDevice[i].vz = NULL;
+                
+                cudaDeviceReset();
             }
-            destroy_timer();
-            is_cleaned = 1;
         }
     }
 }
