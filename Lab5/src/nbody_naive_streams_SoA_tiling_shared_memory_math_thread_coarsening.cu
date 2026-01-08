@@ -1,11 +1,12 @@
 #include "helpers.h"
 #include "gputimer.h"
 
+#define COARSENING 2
+
 #ifndef BLOCK_SIZE
 #define BLOCK_SIZE 32
 #endif
 
-#define COARSENING 32
 
 typedef struct {
     float *x, *y, *z;
@@ -17,7 +18,7 @@ typedef struct {
     - time step
     - number of bodies
 */
-__global__ void bodyForceKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
+__global__ void __launch_bounds__(BLOCK_SIZE, 2) bodyForceKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
     int i1 = (blockIdx.x * COARSENING) * blockDim.x + threadIdx.x;
     int i2 = i1 + blockDim.x; 
     int system_offset = sys_idx * n;
@@ -42,14 +43,21 @@ __global__ void bodyForceKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
     __shared__ float shY[BLOCK_SIZE];
     __shared__ float shZ[BLOCK_SIZE];
 
-    int num_tiles = n / BLOCK_SIZE; 
+    int num_tiles = (n + BLOCK_SIZE - 1) / BLOCK_SIZE; 
+
     for (int tile = 0; tile < num_tiles; tile++) {
         int j_local = threadIdx.x;
         int j_global = tile * BLOCK_SIZE + j_local;
 
-        shX[j_local] = __ldg(&soa.x[system_offset + j_global]);
-        shY[j_local] = __ldg(&soa.y[system_offset + j_global]);
-        shZ[j_local] = __ldg(&soa.z[system_offset + j_global]);
+        if (j_global < n) {
+            shX[j_local] = __ldg(&soa.x[system_offset + j_global]);
+            shY[j_local] = __ldg(&soa.y[system_offset + j_global]);
+            shZ[j_local] = __ldg(&soa.z[system_offset + j_global]);
+        } else {
+            shX[j_local] = 0.0f;
+            shY[j_local] = 0.0f;
+            shZ[j_local] = 0.0f;
+        }
 
         __syncthreads();
 
