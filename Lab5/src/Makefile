@@ -7,7 +7,7 @@ NVCC = nvcc
 
 # Common optimization flags for CPU (GCC)
 COMMON_FLAGS = -Wall -O3 -fopenmp -ffast-math -lm
-LDFLAGS = -lnvToolsExt
+# LDFLAGS = -lnvToolsExt
 # CUDA flags
 # -Xcompiler passes flags to the host compiler (gcc). 
 # We pass -fopenmp so the host side of the CUDA code can spawn threads.
