@@ -17,32 +17,35 @@ typedef struct {
 */
 __global__ void bodyForceKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i >= n)
+        return;
+
     int offset = sys_idx * n + i;
     float Fx = 0.0f, Fy = 0.0f, Fz = 0.0f, dx, dy, dz, distSqr, invDist, invDist3;
     float myX = soa.x[offset];
     float myY = soa.y[offset];
     float myZ = soa.z[offset];
 
-    if (i < n) {
-        for (int j = 0; j < n; j++) {
-            float dx = soa.x[target] - myX;
-            float dy = soa.y[target] - myY;
-            float dz = soa.z[target] - myZ;
-            
-            distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
-            
-            invDist = rsqrtf(distSqr); 
-            invDist3 = invDist * invDist * invDist;
+    for (int j = 0; j < n; j++) {
+        int target = sys_idx * n + j;
 
-            Fx += dx * invDist3;
-            Fy += dy * invDist3;
-            Fz += dz * invDist3;
-        }
+        dx = soa.x[target] - myX;
+        dy = soa.y[target] - myY;
+        dz = soa.z[target] - myZ;
+        
+        distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
+        
+        invDist = rsqrtf(distSqr); 
+        invDist3 = invDist * invDist * invDist;
 
-        soa.vx[offset] += dt * Fx;
-        soa.vy[offset] += dt * Fy;
-        soa.vz[offset] += dt * Fz;
+        Fx += dx * invDist3;
+        Fy += dy * invDist3;
+        Fz += dz * invDist3;
     }
+
+    soa.vx[offset] += dt * Fx;
+    soa.vy[offset] += dt * Fy;
+    soa.vz[offset] += dt * Fz;
 }
 
 /* Integrate positions.
@@ -71,17 +74,17 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
 
     create_timer();
     start_timer();
-    cudaMalloc(&d_soa.x, float_size);
+    cudaMalloc(&d_data.x, float_size);
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc(&d_soa.y, float_size);
+    cudaMalloc(&d_data.y, float_size);
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc(&d_soa.z, float_size);
+    cudaMalloc(&d_data.z, float_size);
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc(&d_soa.vx, float_size);
+    cudaMalloc(&d_data.vx, float_size);
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc(&d_soa.vy, float_size);
+    cudaMalloc(&d_data.vy, float_size);
     CUDA_CHECK_LAST_ERROR();
-    cudaMalloc(&d_soa.vz, float_size);
+    cudaMalloc(&d_data.vz, float_size);
     CUDA_CHECK_LAST_ERROR();
 
     streams = (cudaStream_t *)malloc(num_systems * sizeof(cudaStream_t));
@@ -118,35 +121,33 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
         tmp_vz[i] = h_data[i].vz;
     }
 
-    cudaMemcpy(d_soa.x, tmp_x, float_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.x, tmp_x, float_size, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_soa.y, tmp_y, float_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.y, tmp_y, float_size, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_soa.z, tmp_z, float_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.z, tmp_z, float_size, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_soa.vx, tmp_vx, float_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.vx, tmp_vx, float_size, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_soa.vy, tmp_vy, float_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.vy, tmp_vy, float_size, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(d_soa.vz, tmp_vz, float_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.vz, tmp_vz, float_size, cudaMemcpyHostToDevice);
     CUDA_CHECK_LAST_ERROR();
 
-    Body *system_ptr;
     int iter, sys;
     int gridSize = (bodies_per_system + BLOCK_SIZE - 1) / BLOCK_SIZE;
     for (iter = 1; iter <= nIters; iter++) {
         for (sys = 0; sys < num_systems; sys++) {
-	    system_ptr = &d_data[sys * bodies_per_system];
-            bodyForceKernel<<<gridSize, BLOCK_SIZE, 0, streams[sys]>>>(d_soa, dt, bodies_per_system, sys);
-            integrateKernel<<<gridSize, BLOCK_SIZE, 0, streams[sys]>>>(d_soa, dt, bodies_per_system, sys);
+            bodyForceKernel<<<gridSize, BLOCK_SIZE, 0, streams[sys]>>>(d_data, dt, bodies_per_system, sys);
+            integrateKernel<<<gridSize, BLOCK_SIZE, 0, streams[sys]>>>(d_data, dt, bodies_per_system, sys);
         }
     }
     cudaDeviceSynchronize();
-    cudaMemcpy(tmp_x, d_soa.x, float_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(tmp_x, d_data.x, float_size, cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(tmp_y, d_soa.y, float_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(tmp_y, d_data.y, float_size, cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
-    cudaMemcpy(tmp_z, d_soa.z, float_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(tmp_z, d_data.z, float_size, cudaMemcpyDeviceToHost);
     CUDA_CHECK_LAST_ERROR();
     for (int i = 0; i < total_bodies; i++) {
         h_data[i].x = tmp_x[i];
@@ -170,7 +171,12 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
 
 void cleanUp() {
     destroy_timer();
-    cudaFree(d_data);
+    cudaFree(d_data.x);
+    cudaFree(d_data.y);
+    cudaFree(d_data.z);
+    cudaFree(d_data.vx);
+    cudaFree(d_data.vy);
+    cudaFree(d_data.vz);
     free(streams);
     cudaDeviceReset();
 }
