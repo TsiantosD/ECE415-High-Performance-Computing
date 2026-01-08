@@ -19,12 +19,6 @@ typedef struct {
 GalaxySoA d_data_all[MAX_GPUS];
 cudaStream_t *streams_all[MAX_GPUS];
 
-double get_wall_time() {
-    struct timeval time;
-    if (gettimeofday(&time, NULL)) return 0;
-    return (double)time.tv_sec + (double)time.tv_usec * .000001;
-}
-
 /* Update a single galaxy. Parameters:
     - array of bodies
     - time step
@@ -151,10 +145,8 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     // Warm-up Contexts (Πολύ σημαντικό για το σωστό timing)
     for (int g = 0; g < num_gpus; g++) { cudaSetDevice(g); cudaFree(0); }
 
-    // create_timer();
-    // start_timer();
-
-    double start_t = get_wall_time();
+    create_timer();
+    start_timer();
 
     #pragma omp parallel num_threads(num_gpus)
     {
@@ -209,12 +201,9 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
         }
     }
 
-    double end_t = get_wall_time();
-    double total_time = end_t - start_t;
-
-    // stop_timer();
-    // time = (double) get_timer_ms() / 1000.0f;
-    // destroy_timer();
+    stop_timer();
+    time = (double) get_timer_ms() / 1000.0f;
+    destroy_timer();
 
     for (int i = 0; i < total_bodies; i++) {
         h_data[i].x = tmp_x[i]; h_data[i].y = tmp_y[i]; h_data[i].z = tmp_z[i];
@@ -252,7 +241,7 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
 
     cleanUp();
 
-    return total_time;
+    return time;
 }
 
 void cleanUp() {
