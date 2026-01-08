@@ -20,10 +20,11 @@ __global__ void bodyForceKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
     int system_offset = sys_idx * n;
 
     float myX = 0, myY = 0, myZ = 0;
+
     if (i < n) {
-        myX = soa.x[system_offset + i];
-        myY = soa.y[system_offset + i];
-        myZ = soa.z[system_offset + i];
+        myX = __ldg(&soa.x[system_offset + i]);
+        myY = __ldg(&soa.y[system_offset + i]);
+        myZ = __ldg(&soa.z[system_offset + i]);
     }
 
     __shared__ float shX[BLOCK_SIZE];
@@ -32,41 +33,36 @@ __global__ void bodyForceKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
 
     float Fx = 0.0f, Fy = 0.0f, Fz = 0.0f;
 
-    int num_tiles = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int num_tiles = n / BLOCK_SIZE; 
+
     for (int tile = 0; tile < num_tiles; tile++) {
 
         int j_local = threadIdx.x;
         int j_global = tile * BLOCK_SIZE + j_local;
 
-        if (j_global < n) {
-            shX[j_local] = soa.x[system_offset + j_global];
-            shY[j_local] = soa.y[system_offset + j_global];
-            shZ[j_local] = soa.z[system_offset + j_global];
-        } else {
-            shX[j_local] = 0.0f; shY[j_local] = 0.0f; shZ[j_local] = 0.0f;
-        }
+        shX[j_local] = __ldg(&soa.x[system_offset + j_global]);
+        shY[j_local] = __ldg(&soa.y[system_offset + j_global]);
+        shZ[j_local] = __ldg(&soa.z[system_offset + j_global]);
 
         __syncthreads();
 
         if (i < n) {
             #pragma unroll
             for (int j = 0; j < BLOCK_SIZE; j++) {
-                if (tile * BLOCK_SIZE + j < n) {
-                    float dx = shX[j] - myX;
-                    float dy = shY[j] - myY;
-                    float dz = shZ[j] - myZ;
-                    
-                    float distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
-                    float invDist = rsqrtf(distSqr); 
-                    float invDist3 = invDist * invDist * invDist;
+                float dx = shX[j] - myX;
+                float dy = shY[j] - myY;
+                float dz = shZ[j] - myZ;
 
-                    Fx += dx * invDist3;
-                    Fy += dy * invDist3;
-                    Fz += dz * invDist3;
-                }
+                float distSqr = fmaf(dx, dx, fmaf(dy, dy, fmaf(dz, dz, SOFTENING)));
+
+                float invDist = rsqrtf(distSqr); 
+                float invDist3 = invDist * invDist * invDist;
+
+                Fx = fmaf(dx, invDist3, Fx);
+                Fy = fmaf(dy, invDist3, Fy);
+                Fz = fmaf(dz, invDist3, Fz);
             }
         }
-
         __syncthreads();
     }
 
