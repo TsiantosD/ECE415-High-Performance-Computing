@@ -12,19 +12,24 @@
 #endif
 
 #ifndef BLOCK_SIZE
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 256
 #endif
 
 typedef struct {
-    float *x, *y, *z;
-    float *vx, *vy, *vz;
+    float * __restrict__ x;
+    float * __restrict__ y;
+    float * __restrict__ z;
+    float * __restrict__ vx;
+    float * __restrict__ vy;
+    float * __restrict__ vz;
 } GalaxySoA;
 
 GalaxySoA systemsHost = {0};
 GalaxySoA systemsDevice[GPU_MAX] = {0};
 
-// TODO check out  __launch_bounds__(BLOCK_SIZE, 2) 
-__global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
+//! Forces compiler to optimize registers so we fit more blocks on the core.
+//! shouldnt reach that point but helps
+__global__ __launch_bounds__(BLOCK_SIZE) void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
     //! Find system and position of threads in a range of [0, BLOCK_SIZE] 
     int system_idx = blockIdx.z; 
     int body_local_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -38,7 +43,7 @@ __global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system,
     float my_x = galaxy.x[global_idx];
     float my_y = galaxy.y[global_idx];
     float my_z = galaxy.z[global_idx];
-    
+
     float my_vx = galaxy.vx[global_idx];
     float my_vy = galaxy.vy[global_idx];
     float my_vz = galaxy.vz[global_idx];
@@ -69,7 +74,7 @@ __global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system,
         __syncthreads();
 
         //! Each thread computes its data
-        #pragma unroll 8
+        #pragma unroll 16
         for (int j = 0; j < BLOCK_SIZE; j++) {
             int interaction_idx = tile * BLOCK_SIZE + j;
             if (interaction_idx >= bodies_per_system) break;
@@ -90,21 +95,20 @@ __global__ void calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system,
     }
 
     //! Fused velocity + position update to minimize global memory writes
-    float new_vx = my_vx + dt * Fx;
-    float new_vy = my_vy + dt * Fy;
-    float new_vz = my_vz + dt * Fz;
+    my_vx += dt * Fx;
+    my_vy += dt * Fy;
+    my_vz += dt * Fz;
 
-    float new_x = my_x + new_vx * dt;
-    float new_y = my_y + new_vy * dt;
-    float new_z = my_z + new_vz * dt;
+    my_x += my_vx * dt;
+    my_y += my_vy * dt;
+    my_z += my_vz * dt;
 
-    galaxy.vx[global_idx] = new_vx;
-    galaxy.vy[global_idx] = new_vy;
-    galaxy.vz[global_idx] = new_vz;
-
-    galaxy.x[global_idx] = new_x;
-    galaxy.y[global_idx] = new_y;
-    galaxy.z[global_idx] = new_z;
+    galaxy.vx[global_idx] = my_vx;
+    galaxy.vy[global_idx] = my_vy;
+    galaxy.vz[global_idx] = my_vz;
+    galaxy.x[global_idx]  = my_x;
+    galaxy.y[global_idx]  = my_y;
+    galaxy.z[global_idx]  = my_z;
 }
 
 void cleanUp(void) {
@@ -112,12 +116,12 @@ void cleanUp(void) {
     {
         destroy_timer();
     
-        if (systemsHost.x) { free(systemsHost.x); systemsHost.x = NULL; }
-        if (systemsHost.y) { free(systemsHost.y); systemsHost.y = NULL; }
-        if (systemsHost.z) { free(systemsHost.z); systemsHost.z = NULL; }
-        if (systemsHost.vx) { free(systemsHost.vx); systemsHost.vx = NULL; }
-        if (systemsHost.vy) { free(systemsHost.vy); systemsHost.vy = NULL; }
-        if (systemsHost.vz) { free(systemsHost.vz); systemsHost.vz = NULL; }
+        if (systemsHost.x) { cudaFreeHost(systemsHost.x); systemsHost.x = NULL; }
+        if (systemsHost.y) { cudaFreeHost(systemsHost.y); systemsHost.y = NULL; }
+        if (systemsHost.z) { cudaFreeHost(systemsHost.z); systemsHost.z = NULL; }
+        if (systemsHost.vx) { cudaFreeHost(systemsHost.vx); systemsHost.vx = NULL; }
+        if (systemsHost.vy) { cudaFreeHost(systemsHost.vy); systemsHost.vy = NULL; }
+        if (systemsHost.vz) { cudaFreeHost(systemsHost.vz); systemsHost.vz = NULL; }
 
         for (int i = 0; i < GPU_MAX; i++) {
             if (systemsDevice[i].x != NULL) {
@@ -141,12 +145,14 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     int totalBodies = bodies_per_system * num_systems;
 
     //! Allocate host memory for body information
-    systemsHost.x = (float *) malloc(totalBodies * sizeof(float));
-    systemsHost.y = (float *) malloc(totalBodies * sizeof(float));
-    systemsHost.z = (float *) malloc(totalBodies * sizeof(float));
-    systemsHost.vx = (float *) malloc(totalBodies * sizeof(float));
-    systemsHost.vy = (float *) malloc(totalBodies * sizeof(float));
-    systemsHost.vz = (float *) malloc(totalBodies * sizeof(float));
+    size_t totalBytes = totalBodies * sizeof(float);
+
+    cudaMallocHost((void**)&systemsHost.x, totalBytes);
+    cudaMallocHost((void**)&systemsHost.y, totalBytes);
+    cudaMallocHost((void**)&systemsHost.z, totalBytes);
+    cudaMallocHost((void**)&systemsHost.vx, totalBytes);
+    cudaMallocHost((void**)&systemsHost.vy, totalBytes);
+    cudaMallocHost((void**)&systemsHost.vz, totalBytes);
 
     //! Transform AoS (Body *) to SoA (GalaxySoA *)
     for (int curBody = 0; curBody < totalBodies; curBody++) {
@@ -186,21 +192,21 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
         int start_sys = gpu_id * systems_per_gpu;
         int end_sys = (start_sys + systems_per_gpu < num_systems) ? start_sys + systems_per_gpu : num_systems;
         int my_system_count = end_sys - start_sys;
-        int bytes = my_system_count * bodies_per_system * sizeof(float);
+        size_t bytes = (size_t)my_system_count * bodies_per_system * sizeof(float);
 
         if (my_system_count > 0) {
             //! Allocate cuda memory for kernel calls for this' gpu workload
-            cudaMalloc(&(systemsDevice[gpu_id].x), bytes);
+            cudaMalloc((void**)&(systemsDevice[gpu_id].x), bytes);
             CUDA_CHECK_LAST_ERROR();
-            cudaMalloc(&(systemsDevice[gpu_id].y), bytes);
+            cudaMalloc((void**)&(systemsDevice[gpu_id].y), bytes);
             CUDA_CHECK_LAST_ERROR();
-            cudaMalloc(&(systemsDevice[gpu_id].z), bytes);
+            cudaMalloc((void**)&(systemsDevice[gpu_id].z), bytes);
             CUDA_CHECK_LAST_ERROR();
-            cudaMalloc(&(systemsDevice[gpu_id].vx), bytes);
+            cudaMalloc((void**)&(systemsDevice[gpu_id].vx), bytes);
             CUDA_CHECK_LAST_ERROR();
-            cudaMalloc(&(systemsDevice[gpu_id].vy), bytes);
+            cudaMalloc((void**)&(systemsDevice[gpu_id].vy), bytes);
             CUDA_CHECK_LAST_ERROR();
-            cudaMalloc(&(systemsDevice[gpu_id].vz), bytes);
+            cudaMalloc((void**)&(systemsDevice[gpu_id].vz), bytes);
             CUDA_CHECK_LAST_ERROR();
 
             cudaMemcpy(systemsDevice[gpu_id].x, &(systemsHost.x[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
@@ -215,7 +221,6 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
             CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].vz, &(systemsHost.vz[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
             CUDA_CHECK_LAST_ERROR();
-
             dim3 threads(BLOCK_SIZE);
             dim3 grid((bodies_per_system + BLOCK_SIZE - 1) / BLOCK_SIZE, 1, my_system_count);
 

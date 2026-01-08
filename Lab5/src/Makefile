@@ -13,7 +13,7 @@ LDFLAGS = -lnvToolsExt
 # We pass -fopenmp so the host side of the CUDA code can spawn threads.
 # --use_fast_math is the CUDA equivalent of -ffast-math
 # useful --ptxas-options=-v 
-NVCC_FLAGS = -O3 --use_fast_math -Xcompiler -fopenmp
+NVCC_FLAGS = -O3 --ptxas-options=-v --use_fast_math -Xcompiler -fopenmp
 
 # Mode for main target
 CPU_MODE ?= omp
