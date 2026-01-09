@@ -97,9 +97,9 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 2) calculate_forces_kernel(
         int idx = (blockIdx.x * COARSENING + c) * THREADS_PER_BLOCK + tid;
         //! No need to check since we added padding
         int global_idx = system_offset + idx;
-        galaxy.vx[global_idx] += dt * Fx[c];
-        galaxy.vy[global_idx] += dt * Fy[c];
-        galaxy.vz[global_idx] += dt * Fz[c];
+        galaxy.vx[global_idx] = fmaf(dt, Fx[c], galaxy.vx[global_idx]);
+        galaxy.vy[global_idx] = fmaf(dt, Fy[c], galaxy.vy[global_idx]);
+        galaxy.vz[global_idx] = fmaf(dt, Fz[c], galaxy.vz[global_idx]);
     }
 }
 
