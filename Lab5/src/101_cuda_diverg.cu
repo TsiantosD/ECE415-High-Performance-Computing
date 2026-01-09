@@ -185,7 +185,7 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     int gpu_used = gpu_num > GPU_MAX ? GPU_MAX : gpu_num; 
     printf("Running on %d GPUs.\n", gpu_used);
 
-    for (int g = 0; g < gpu_num; g++) cudaInitDevice(g, 0, 0);
+    for (int g = 0; g < gpu_num; g++) { cudaSetDevice(g); cudaFree(0); }
 
     create_timer();
     start_timer();

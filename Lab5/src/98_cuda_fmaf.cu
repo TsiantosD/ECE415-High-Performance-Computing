@@ -80,9 +80,9 @@ __global__ void __launch_bounds__(BLOCK_SIZE, 2) calculate_forces_kernel(GalaxyS
         __syncthreads();
     }
 
-    galaxy.vx[global_idx] += dt * Fx;
-    galaxy.vy[global_idx] += dt * Fy;
-    galaxy.vz[global_idx] += dt * Fz;
+    galaxy.vx[global_idx] = fmaf(dt, Fx, galaxy.vx[global_idx]);
+    galaxy.vy[global_idx] = fmaf(dt, Fy, galaxy.vy[global_idx]);
+    galaxy.vz[global_idx] = fmaf(dt, Fz, galaxy.vz[global_idx]);
 }
 
 __global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_system, float dt, int my_system) {
@@ -93,9 +93,9 @@ __global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_syst
     
     int global_idx = system_offset + body_local_idx;
 
-    galaxy.x[global_idx] += galaxy.vx[global_idx] * dt;
-    galaxy.y[global_idx] += galaxy.vy[global_idx] * dt;
-    galaxy.z[global_idx] += galaxy.vz[global_idx] * dt;
+    galaxy.x[global_idx] = fmaf(galaxy.vx[global_idx], dt, galaxy.x[global_idx]);
+    galaxy.y[global_idx] = fmaf(galaxy.vy[global_idx], dt, galaxy.y[global_idx]);
+    galaxy.z[global_idx] = fmaf(galaxy.vz[global_idx], dt, galaxy.z[global_idx]);
 }
 
 void cleanUp(void) {
@@ -160,7 +160,7 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
     int gpu_used = gpu_num > GPU_MAX ? GPU_MAX : gpu_num; 
     printf("Running on %d GPUs.\n", gpu_used);
 
-    for (int g = 0; g < gpu_num; g++) cudaInitDevice(g, 0, 0);
+    for (int g = 0; g < gpu_num; g++) { cudaSetDevice(g); cudaFree(0); }
 
     create_timer();
     start_timer();
