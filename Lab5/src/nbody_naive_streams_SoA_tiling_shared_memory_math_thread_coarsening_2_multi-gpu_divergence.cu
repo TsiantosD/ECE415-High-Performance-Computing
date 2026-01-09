@@ -59,7 +59,7 @@ bodyForceKernel(GalaxySoA soa, int n_padded, int sys_idx) {
 
         __syncthreads();
 
-        #pragma unroll
+        #pragma unroll 8
         for (int j = 0; j < BLOCK_SIZE; j++) {
             float dx1 = shX[j] - myX1; float dy1 = shY[j] - myY1; float dz1 = shZ[j] - myZ1;
             float d2_1 = fmaf(dx1, dx1, fmaf(dy1, dy1, fmaf(dz1, dz1, SOFTENING)));
