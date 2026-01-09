@@ -16,6 +16,7 @@
 #endif
 
 #define THREADS_PER_BLOCK (BLOCK_DIM * BLOCK_DIM)
+#define COARSENING 4
 
 typedef struct {
     float *x, *y, *z;
@@ -32,21 +33,26 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 2) calculate_forces_kernel(
     int system_idx = my_system;
     
     int tid = threadIdx.y * blockDim.x + threadIdx.x;
-
-    int body_local_idx = blockIdx.x * THREADS_PER_BLOCK + tid;
     int system_offset = system_idx * bodies_per_system;
-    
-    int global_idx = system_offset + body_local_idx;
 
-    float my_x = __ldg(&galaxy.x[global_idx]);
-    float my_y = __ldg(&galaxy.y[global_idx]);
-    float my_z = __ldg(&galaxy.z[global_idx]);
+    //! Initialise dyamic coarsening variables (uses local mem) 
+    float my_x[COARSENING], my_y[COARSENING], my_z[COARSENING];
+    float Fx[COARSENING], Fy[COARSENING], Fz[COARSENING];
+
+    //! Select COARSENING num of bodies to calculate 
+    #pragma unroll
+    for (int c = 0; c < COARSENING; c++) {
+        int idx = (blockIdx.x * COARSENING + c) * THREADS_PER_BLOCK + tid;
+        Fx[c] = 0.0f; Fy[c] = 0.0f; Fz[c] = 0.0f;
+        int global_idx = system_offset + idx;
+        my_x[c] = __ldg(&galaxy.x[global_idx]);
+        my_y[c] = __ldg(&galaxy.y[global_idx]);
+        my_z[c] = __ldg(&galaxy.z[global_idx]);
+    }
     
     __shared__ float sh_x[THREADS_PER_BLOCK];
     __shared__ float sh_y[THREADS_PER_BLOCK];
     __shared__ float sh_z[THREADS_PER_BLOCK];
-
-    float Fx = 0.0f, Fy = 0.0f, Fz = 0.0f;
 
     int num_tiles = (bodies_per_system + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
@@ -66,24 +72,41 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK, 2) calculate_forces_kernel(
 
         #pragma unroll 16
         for (int j = 0; j < THREADS_PER_BLOCK; j++) {
-            float dx = sh_x[j] - my_x;
-            float dy = sh_y[j] - my_y;
-            float dz = sh_z[j] - my_z;
-            
-            float distSqr = fmaf(dx, dx, fmaf(dy, dy, fmaf(dz, dz, SOFTENING)));
-            float invDist = rsqrtf(distSqr);
-            float invDist3 = invDist * invDist * invDist;
+            float sx = sh_x[j]; 
+            float sy = sh_y[j]; 
+            float sz = sh_z[j];
 
-            Fx = fmaf(dx, invDist3, Fx);
-            Fy = fmaf(dy, invDist3, Fy);
-            Fz = fmaf(dz, invDist3, Fz);
+            //! Calculate all COARSENING number of elements assigned to me
+            #pragma unroll
+            for (int c = 0; c < COARSENING; c++) {
+                float dx = sx - my_x[c];
+                float dy = sy - my_y[c];
+                float dz = sz - my_z[c];
+                
+                float distSqr = fmaf(dx, dx, fmaf(dy, dy, fmaf(dz, dz, SOFTENING)));
+                float invDist = rsqrtf(distSqr);
+                float invDist3 = invDist * invDist * invDist;
+
+                Fx[c] = fmaf(dx, invDist3, Fx[c]);
+                Fy[c] = fmaf(dy, invDist3, Fy[c]);
+                Fz[c] = fmaf(dz, invDist3, Fz[c]);
+            }
         }
         __syncthreads();
     }
 
-    galaxy.vx[global_idx] += dt * Fx;
-    galaxy.vy[global_idx] += dt * Fy;
-    galaxy.vz[global_idx] += dt * Fz;
+    
+    //! Write back all COARSENING number of elements assigned to me
+    #pragma unroll
+    for (int c = 0; c < COARSENING; c++) {
+        int idx = (blockIdx.x * COARSENING + c) * THREADS_PER_BLOCK + tid;
+        if (idx < bodies_per_system) {
+            int global_idx = system_offset + idx;
+            galaxy.vx[global_idx] += dt * Fx[c];
+            galaxy.vy[global_idx] += dt * Fy[c];
+            galaxy.vz[global_idx] += dt * Fz[c];
+        }
+    }
 }
 
 __global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_system, float dt, int my_system) {
@@ -212,18 +235,20 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
             //CUDA_CHECK_LAST_ERROR();
             
             dim3 threads(BLOCK_DIM, BLOCK_DIM);
-            dim3 grid((bodies_per_system + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK);
+            //! Update grid to include coarsening (divided by COARSENING)
+            dim3 gridForce((bodies_per_system + (THREADS_PER_BLOCK * COARSENING) - 1) / (THREADS_PER_BLOCK * COARSENING));
+            dim3 gridIntegrate((bodies_per_system + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK);
 
             for (int iter = 0; iter < nIters; iter++) {
                 for (int curSystem = 0; curSystem < my_system_count; curSystem++) {
-                    calculate_forces_kernel<<<grid, threads, 0, streams_all[gpu_id][curSystem]>>>(
+                    calculate_forces_kernel<<<gridForce, threads, 0, streams_all[gpu_id][curSystem]>>>(
                         systemsDevice[gpu_id],
                         bodies_per_system, 
                         dt,
                         curSystem
                     );
                     
-                    integrate_positions_kernel<<<grid, threads, 0, streams_all[gpu_id][curSystem]>>>(
+                    integrate_positions_kernel<<<gridIntegrate, threads, 0, streams_all[gpu_id][curSystem]>>>(
                         systemsDevice[gpu_id],
                         bodies_per_system, 
                         dt,

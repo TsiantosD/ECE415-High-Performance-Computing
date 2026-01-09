@@ -23,24 +23,18 @@ typedef struct {
 GalaxySoA systemsHost;
 GalaxySoA systemsDevice[GPU_MAX];
 
-__global__ void __launch_bounds__(BLOCK_SIZE, 2) calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
+__global__ void __launch_bounds__(BLOCK_SIZE, 2) calculate_forces_kernel(GalaxySoA galaxy, int bodies_per_system, float dt, int my_system) {
     //! Find system and position of threads in a range of [0, BLOCK_SIZE] 
-    int system_idx = blockIdx.y; 
+    int system_idx = my_system; 
     int body_local_idx = blockIdx.x * blockDim.x + threadIdx.x;
     int system_offset = system_idx * bodies_per_system;
     
-    if (body_local_idx >= bodies_per_system) return;
-
     //! Global memory index for the current block of bodies (of size BLOCK_SIZE)
     int global_idx = system_offset + body_local_idx;
 
-    float my_x = galaxy.x[global_idx];
-    float my_y = galaxy.y[global_idx];
-    float my_z = galaxy.z[global_idx];
-    
-    float my_vx = galaxy.vx[global_idx];
-    float my_vy = galaxy.vy[global_idx];
-    float my_vz = galaxy.vz[global_idx];
+    float my_x = __ldg(&galaxy.x[global_idx]);
+    float my_y = __ldg(&galaxy.y[global_idx]);
+    float my_z = __ldg(&galaxy.z[global_idx]);
 
     __shared__ float sh_x[BLOCK_SIZE];
     __shared__ float sh_y[BLOCK_SIZE];
@@ -53,13 +47,14 @@ __global__ void __launch_bounds__(BLOCK_SIZE, 2) calculate_forces_kernel(GalaxyS
     //! Iterate upon chunks/tiles of BLOCK_SIZE
     //! This is possible due to velocity calculations being associative
     for (int tile = 0; tile < num_tiles; tile++) {
-        int t_idx = tile * BLOCK_SIZE + threadIdx.x;
+        int j_local = threadIdx.x;
+        int t_idx = tile * BLOCK_SIZE + j_local;
         
         //! Load that chunk into shared memory for all threads to access
         if (t_idx < bodies_per_system) {
-            sh_x[threadIdx.x] = galaxy.x[system_offset + t_idx];
-            sh_y[threadIdx.x] = galaxy.y[system_offset + t_idx];
-            sh_z[threadIdx.x] = galaxy.z[system_offset + t_idx];
+            sh_x[threadIdx.x] = __ldg(&galaxy.x[system_offset + t_idx]);
+            sh_y[threadIdx.x] = __ldg(&galaxy.y[system_offset + t_idx]);
+            sh_z[threadIdx.x] = __ldg(&galaxy.z[system_offset + t_idx]);
         } else {
             sh_x[threadIdx.x] = 0.0f;
             sh_y[threadIdx.x] = 0.0f;
@@ -70,9 +65,6 @@ __global__ void __launch_bounds__(BLOCK_SIZE, 2) calculate_forces_kernel(GalaxyS
         //! Each thread computes its data
         #pragma unroll 8
         for (int j = 0; j < BLOCK_SIZE; j++) {
-            int interaction_idx = tile * BLOCK_SIZE + j;
-            if (interaction_idx >= bodies_per_system) break;
-
             float dx = sh_x[j] - my_x;
             float dy = sh_y[j] - my_y;
             float dz = sh_z[j] - my_z;
@@ -88,19 +80,17 @@ __global__ void __launch_bounds__(BLOCK_SIZE, 2) calculate_forces_kernel(GalaxyS
         __syncthreads();
     }
 
-    galaxy.vx[global_idx] = my_vx + dt * Fx;
-    galaxy.vy[global_idx] = my_vy + dt * Fy;
-    galaxy.vz[global_idx] = my_vz + dt * Fz;
+    galaxy.vx[global_idx] += dt * Fx;
+    galaxy.vy[global_idx] += dt * Fy;
+    galaxy.vz[global_idx] += dt * Fz;
 }
 
-__global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_system, float dt) {
+__global__ void integrate_positions_kernel(GalaxySoA galaxy, int bodies_per_system, float dt, int my_system) {
     //! Same indexing as forces kernel
-    int system_idx = blockIdx.y; 
+    int system_idx = my_system; 
     int body_local_idx = blockIdx.x * blockDim.x + threadIdx.x;
     int system_offset = system_idx * bodies_per_system;
     
-    if (body_local_idx >= bodies_per_system) return;
-
     int global_idx = system_offset + body_local_idx;
 
     galaxy.x[global_idx] += galaxy.vx[global_idx] * dt;
@@ -112,7 +102,7 @@ void cleanUp(void) {
     #pragma omp critical
     {
         destroy_timer();
-    
+        
         if (systemsHost.x) { free(systemsHost.x); systemsHost.x = NULL; }
         if (systemsHost.y) { free(systemsHost.y); systemsHost.y = NULL; }
         if (systemsHost.z) { free(systemsHost.z); systemsHost.z = NULL; }
@@ -137,6 +127,9 @@ void cleanUp(void) {
     }
 }
 
+cudaStream_t *streams;
+cudaStream_t *streams_all[GPU_MAX];
+
 double run_gpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, const float dt, Body *data) {
     
     int totalBodies = bodies_per_system * num_systems;
@@ -159,30 +152,24 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
         systemsHost.vz[curBody] = data[curBody].vz;
     }
     
-    //! Do multiple GPU handling
-    omp_set_nested(0);
-    omp_set_dynamic(0);
-
     int gpu_num = 0;
     cudaGetDeviceCount(&gpu_num);
     if (gpu_num == 0) return 0.0;
-    CUDA_CHECK_LAST_ERROR();
+    //CUDA_CHECK_LAST_ERROR();
 
     int gpu_used = gpu_num > GPU_MAX ? GPU_MAX : gpu_num; 
     printf("Running on %d GPUs.\n", gpu_used);
 
-    omp_set_num_threads(gpu_used);
+    for (int g = 0; g < gpu_num; g++) cudaInitDevice(g, 0, 0);
+
     create_timer();
     start_timer();
 
-    #pragma omp parallel
+    #pragma omp parallel num_threads(gpu_num)
     {
-        int thread_id = omp_get_thread_num();
-        int num_threads = omp_get_num_threads();
-        int gpu_id = thread_id % gpu_used; //! Safety net
-        
+        int gpu_id = omp_get_thread_num();
         cudaSetDevice(gpu_id);
-        CUDA_CHECK_LAST_ERROR();
+        //CUDA_CHECK_LAST_ERROR();
         
         int systems_per_gpu = (num_systems + gpu_used - 1) / gpu_used;
         int start_sys = gpu_id * systems_per_gpu;
@@ -194,67 +181,69 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
             
             //! Allocate cuda memory for kernel calls for this' gpu workload
             cudaMalloc(&(systemsDevice[gpu_id].x), bytes);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].y), bytes);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].z), bytes);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].vx), bytes);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].vy), bytes);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMalloc(&(systemsDevice[gpu_id].vz), bytes);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
+
+            streams_all[gpu_id] = (cudaStream_t*)malloc(my_system_count * sizeof(cudaStream_t));
+            for (int i = 0; i < my_system_count; i++) cudaStreamCreate(&streams_all[gpu_id][i]);
 
             cudaMemcpy(systemsDevice[gpu_id].x, &(systemsHost.x[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].y, &(systemsHost.y[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].z, &(systemsHost.z[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].vx, &(systemsHost.vx[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].vy, &(systemsHost.vy[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(systemsDevice[gpu_id].vz, &(systemsHost.vz[start_sys * bodies_per_system]), bytes, cudaMemcpyHostToDevice);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             
             dim3 threads(BLOCK_SIZE);
-            dim3 grid((bodies_per_system + BLOCK_SIZE - 1) / BLOCK_SIZE, my_system_count);
+            dim3 grid((bodies_per_system + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
             for (int iter = 0; iter < nIters; iter++) {
-                calculate_forces_kernel<<<grid, threads>>>(
-                    systemsDevice[gpu_id],
-                    bodies_per_system, 
-                    dt
-                );
-                
-                //TODO sync if we add streams
-
-                integrate_positions_kernel<<<grid, threads>>>(
-                    systemsDevice[gpu_id],
-                    bodies_per_system, 
-                    dt
-                );
+                for (int curSystem = 0; curSystem < my_system_count; curSystem++) {
+                    calculate_forces_kernel<<<grid, threads, 0, streams_all[gpu_id][curSystem]>>>(
+                        systemsDevice[gpu_id],
+                        bodies_per_system, 
+                        dt,
+                        curSystem
+                    );
+                    
+                    integrate_positions_kernel<<<grid, threads, 0, streams_all[gpu_id][curSystem]>>>(
+                        systemsDevice[gpu_id],
+                        bodies_per_system, 
+                        dt,
+                        curSystem
+                    );
+                }
             }
             
             cudaDeviceSynchronize();
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
 
             cudaMemcpy(&(systemsHost.x[start_sys * bodies_per_system]), systemsDevice[gpu_id].x, bytes, cudaMemcpyDeviceToHost);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(&(systemsHost.y[start_sys * bodies_per_system]), systemsDevice[gpu_id].y, bytes, cudaMemcpyDeviceToHost);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
             cudaMemcpy(&(systemsHost.z[start_sys * bodies_per_system]), systemsDevice[gpu_id].z, bytes, cudaMemcpyDeviceToHost);
-            CUDA_CHECK_LAST_ERROR();
-            cudaMemcpy(&(systemsHost.vx[start_sys * bodies_per_system]), systemsDevice[gpu_id].vx, bytes, cudaMemcpyDeviceToHost);
-            CUDA_CHECK_LAST_ERROR();
-            cudaMemcpy(&(systemsHost.vy[start_sys * bodies_per_system]), systemsDevice[gpu_id].vy, bytes, cudaMemcpyDeviceToHost);
-            CUDA_CHECK_LAST_ERROR();
-            cudaMemcpy(&(systemsHost.vz[start_sys * bodies_per_system]), systemsDevice[gpu_id].vz, bytes, cudaMemcpyDeviceToHost);
-            CUDA_CHECK_LAST_ERROR();
+            //CUDA_CHECK_LAST_ERROR();
         }
     }
+
+    stop_timer();
+    double total_time = (double) get_timer_ms() / 1000.0f;
 
     omp_set_num_threads(omp_get_max_threads());
     #pragma omp parallel for
@@ -268,8 +257,21 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
         data[i].vz = systemsHost.vz[i];
     }
 
-    stop_timer();
-    double total_time = (double) get_timer_ms() / 1000.0f;
+    for (int g = 0; g < gpu_num; g++) {
+        cudaSetDevice(g);
+
+        int systems_per_gpu = (num_systems + gpu_num - 1) / gpu_num;
+        int start_sys = g * systems_per_gpu;
+        int end_sys = min(start_sys + systems_per_gpu, num_systems);
+        int my_systems = (start_sys < num_systems) ? (end_sys - start_sys) : 0;
+
+        if (my_systems > 0) {
+            for (int i = 0; i < my_systems; i++) {
+                cudaStreamDestroy(streams_all[g][i]);
+            }
+            free(streams_all[g]);
+        }
+    }
     cleanUp();
 
     return total_time;
