@@ -4,7 +4,7 @@
 # Hardcoded Configuration
 # ==========================================
 INPUT="galaxy_data.bin"       # Default Input Image
-ITERATIONS=25                 # Default Iterations
+ITERATIONS=50                 # Default Iterations
 CPU_MODE="none"                # 0 = Speed (No checks), 1 = Verify correctness
 
 # ==========================================
@@ -53,5 +53,5 @@ for (( i=START; i<=END; i++ )); do
     # -c 0  (Disable output check)
     # -i galaxy_data.bin (Input)
     # -f $i (Index of the file to use)
-    ./run.sh -n "$ITERATIONS" --gpu="on" --cpu="$CPU_MODE" -i "$INPUT" -f "$i"
+    ./run.sh -n "$ITERATIONS" --gpu="on" --cpu="$CPU_MODE" -i "$INPUT" -f "$i" -b 256
 done

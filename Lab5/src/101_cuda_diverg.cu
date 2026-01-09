@@ -16,7 +16,7 @@
 #endif
 
 #define THREADS_PER_BLOCK (BLOCK_DIM * BLOCK_DIM)
-#define COARSENING 4
+#define COARSENING 2
 
 typedef struct {
     float *x, *y, *z;
