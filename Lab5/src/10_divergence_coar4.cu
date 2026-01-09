@@ -49,7 +49,7 @@ bodyForceKernel(GalaxySoA soa, int n_padded, int sys_idx) {
     __shared__ float shX[BLOCK_SIZE], shY[BLOCK_SIZE], shZ[BLOCK_SIZE];
     int num_tiles = n_padded / BLOCK_SIZE;
 
-    #pragma unroll
+    #pragma unroll 2
     for (int tile = 0; tile < num_tiles; tile++) {
         int j_local = threadIdx.x;
 
