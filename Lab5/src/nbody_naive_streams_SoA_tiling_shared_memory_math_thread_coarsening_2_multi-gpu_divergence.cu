@@ -19,13 +19,15 @@ typedef struct {
 GalaxySoA d_data_all[MAX_GPUS];
 cudaStream_t *streams_all[MAX_GPUS];
 
+__constant__ float d_dt;
+
 /* Update a single galaxy. Parameters:
     - array of bodies
     - time step
     - number of bodies
 */
 __global__ void __launch_bounds__(BLOCK_SIZE, 2) 
-bodyForceKernel(GalaxySoA soa, float dt, int n_padded, int sys_idx) {
+bodyForceKernel(GalaxySoA soa, int n_padded, int sys_idx) {
 
     int i1 = (blockIdx.x * COARSENING) * blockDim.x + threadIdx.x;
     int i2 = i1 + blockDim.x; 
@@ -57,7 +59,7 @@ bodyForceKernel(GalaxySoA soa, float dt, int n_padded, int sys_idx) {
 
         __syncthreads();
 
-        #pragma unroll 8
+        #pragma unroll
         for (int j = 0; j < BLOCK_SIZE; j++) {
             float dx1 = shX[j] - myX1; float dy1 = shY[j] - myY1; float dz1 = shZ[j] - myZ1;
             float d2_1 = fmaf(dx1, dx1, fmaf(dy1, dy1, fmaf(dz1, dz1, SOFTENING)));
@@ -72,13 +74,13 @@ bodyForceKernel(GalaxySoA soa, float dt, int n_padded, int sys_idx) {
         __syncthreads();
     }
 
-    soa.vx[system_offset + i1] = fmaf(dt, Fx1, soa.vx[system_offset + i1]);
-    soa.vy[system_offset + i1] = fmaf(dt, Fy1, soa.vy[system_offset + i1]);
-    soa.vz[system_offset + i1] = fmaf(dt, Fz1, soa.vz[system_offset + i1]);
+    soa.vx[system_offset + i1] = fmaf(d_dt, Fx1, soa.vx[system_offset + i1]);
+    soa.vy[system_offset + i1] = fmaf(d_dt, Fy1, soa.vy[system_offset + i1]);
+    soa.vz[system_offset + i1] = fmaf(d_dt, Fz1, soa.vz[system_offset + i1]);
 
-    soa.vx[system_offset + i2] = fmaf(dt, Fx2, soa.vx[system_offset + i2]);
-    soa.vy[system_offset + i2] = fmaf(dt, Fy2, soa.vy[system_offset + i2]);
-    soa.vz[system_offset + i2] = fmaf(dt, Fz2, soa.vz[system_offset + i2]);
+    soa.vx[system_offset + i2] = fmaf(d_dt, Fx2, soa.vx[system_offset + i2]);
+    soa.vy[system_offset + i2] = fmaf(d_dt, Fy2, soa.vy[system_offset + i2]);
+    soa.vz[system_offset + i2] = fmaf(d_dt, Fz2, soa.vz[system_offset + i2]);
 }
 
 /* Integrate positions.
@@ -86,15 +88,13 @@ bodyForceKernel(GalaxySoA soa, float dt, int n_padded, int sys_idx) {
     - time step
     - number of bodies
 */
-__global__ void integrateKernel(GalaxySoA soa, float dt, int n, int sys_idx) {
+__global__ void integrateKernel(GalaxySoA soa, int n, int sys_idx) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     int offset = sys_idx * n + i;
 
-    if (i < n) {
-        soa.x[offset] += soa.vx[offset] * dt;
-        soa.y[offset] += soa.vy[offset] * dt;
-        soa.z[offset] += soa.vz[offset] * dt;
-    }
+    soa.x[offset] += soa.vx[offset] * d_dt;
+    soa.y[offset] += soa.vy[offset] * d_dt;
+    soa.z[offset] += soa.vz[offset] * d_dt;
 }
 
 GalaxySoA d_data;
@@ -144,6 +144,8 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
         int tid = omp_get_thread_num();
         cudaSetDevice(tid);
 
+        cudaMemcpyToSymbol(d_dt, &dt, sizeof(float));
+
         int systems_per_gpu = (num_systems + num_gpus - 1) / num_gpus;
         int start_sys = tid * systems_per_gpu;
         int end_sys = min(start_sys + systems_per_gpu, num_systems);
@@ -175,8 +177,8 @@ double run_gpu_simulation(const int num_systems, const int bodies_per_system, co
 
             for (int iter = 0; iter < nIters; iter++) {
                 for (int s = 0; s < my_systems; s++) {
-                    bodyForceKernel<<<gridSize, BLOCK_SIZE, 0, streams_all[tid][s]>>>(d_data_all[tid], dt, n_padded, s);
-                    integrateKernel<<<gridInt, BLOCK_SIZE, 0, streams_all[tid][s]>>>(d_data_all[tid], dt, n_padded, s);
+                    bodyForceKernel<<<gridSize, BLOCK_SIZE, 0, streams_all[tid][s]>>>(d_data_all[tid], n_padded, s);
+                    integrateKernel<<<gridInt, BLOCK_SIZE, 0, streams_all[tid][s]>>>(d_data_all[tid], n_padded, s);
                 }
             }
 
