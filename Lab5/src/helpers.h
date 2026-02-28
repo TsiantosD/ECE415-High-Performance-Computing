@@ -2,6 +2,8 @@
 #define HELPERS_H
 #include <time.h> 
 #include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #define SOFTENING 0.01f
 
@@ -14,6 +16,7 @@ extern "C" {
 #endif
 
 void cleanUp(void);
+void save_frame(Body *data, int total_bodies, int iter);
 
 double run_cpu_simulation(const int num_systems, const int bodies_per_system, const int nIters, 
                             const float dt, Body *data);

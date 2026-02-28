@@ -384,6 +384,11 @@ if [ "$ITERATIONS" -gt 1 ]; then
     mkdir -p "$LOG_DIR"
 fi
 
+# Determine simulation parameters
+# We'll use 20 iterations and 0.05 dt for a more visible simulation if not specified
+SIM_ITERS=${SIM_ITERS:-20}
+SIM_DT=${SIM_DT:-0.05}
+
 echo ""
 echo "Starting Execution..."
 echo "--------------------------------------"
@@ -391,9 +396,9 @@ for (( i=1; i<=ITERATIONS; i++ ))
 do
     if [ "$ITERATIONS" -gt 1 ]; then
         echo "Run #$i..."
-        ./src/main "$INPUT_PATH" "$OUTPUT_PATH" > "$LOG_DIR/run_$i.log"
+        ./src/main "$INPUT_PATH" "$SIM_ITERS" "$SIM_DT" "$OUTPUT_PATH" > "$LOG_DIR/run_$i.log"
     else
-        ./src/main "$INPUT_PATH" "$OUTPUT_PATH" 
+        ./src/main "$INPUT_PATH" "$SIM_ITERS" "$SIM_DT" "$OUTPUT_PATH" 
     fi
 done
 echo "--------------------------------------"

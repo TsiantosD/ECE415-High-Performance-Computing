@@ -4,25 +4,48 @@
 #include <string.h>
 #include "helpers.h"
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #define ACCURACY 0.001
+
+void save_frame(Body *data, int total_bodies, int iter) {
+    char filename[64];
+    mkdir("frames", 0777); 
+    sprintf(filename, "frames/frame_%04d.csv", iter);
+    FILE *f = fopen(filename, "w");
+    if (f == NULL) {
+        perror("Error opening frame file");
+        return;
+    }
+
+    fprintf(f, "x,y,z\n");
+    for (int i = 0; i < total_bodies; i++) {
+        fprintf(f, "%f,%f,%f\n", data[i].x, data[i].y, data[i].z);
+    }
+    fclose(f);
+}
 
 int main(const int argc, const char *argv[]) {
     /* Default Configuration */
     int num_systems = 32;       	/* Number of independent galaxies */
     int bodies_per_system = 8192;	/* Number of bodies per galaxy */
-    const int nIters = 20;          /* Simulation steps */ 
-    const float dt = 0.01f;         /* Timestep */
+    int nIters = 20;                /* Simulation steps */ 
+    float dt = 0.01f;               /* Timestep */
+
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <input_file> [nIters] [dt] [output_file]\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    if (argc >= 3) nIters = atoi(argv[2]);
+    if (argc >= 4) dt = atof(argv[3]);
 
     FILE *fp;
     Body *cpu_data, *gpu_data;
     float *buf;
     int total_bodies;
     double totalTime;
-
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <input_file> [output_file]\n", argv[0]);
-        return EXIT_FAILURE;
-    }
 
     /* Attempt to load dataset */
     fp = fopen(argv[1], "rb");
@@ -42,6 +65,10 @@ int main(const int argc, const char *argv[]) {
 
     /* Allocate memory for ALL systems */
     total_bodies = num_systems * bodies_per_system;
+    
+    /* Clear old frames if they exist */
+    system("rm -rf frames && mkdir -p frames");
+    
     cpu_data = (Body *) malloc(total_bodies * sizeof(Body));
     gpu_data = (Body *) malloc(total_bodies * sizeof(Body));
 
@@ -111,17 +138,20 @@ int main(const int argc, const char *argv[]) {
 #endif
 
 #if ONLY_CPU==1
-    /* Ensure an output filename was provided */
-    if (argc >= 3) {
-        fp = fopen(argv[2], "wb");
+    /* Ensure an output filename was provided (now potentially at argv[4]) */
+    const char *out_filename = NULL;
+    if (argc >= 5) out_filename = argv[4];
+    else if (argc == 2) { /* Fallback for original usage */ }
+
+    if (out_filename) {
+        fp = fopen(out_filename, "wb");
         if (!fp) {
-            fprintf(stderr, "\nError: failed to open output file %s\n", argv[2]);
-            /* Don't return failure here, just print error so we can free memory */
+            fprintf(stderr, "\nError: failed to open output file %s\n", out_filename);
         } else {
             /* Write the header (Systems + Bodies count) to match input format */
             if (fwrite(&num_systems, sizeof(int), 1, fp) != 1 ||
                 fwrite(&bodies_per_system, sizeof(int), 1, fp) != 1) {
-                fprintf(stderr, "\nError: failed to write dataset header to %s\n", argv[2]);
+                fprintf(stderr, "\nError: failed to write dataset header to %s\n", out_filename);
             } else {
                 /* Write the actual body data */
                 size_t nwrite = fwrite(cpu_data, sizeof(Body), (size_t)total_bodies, fp);
@@ -130,7 +160,7 @@ int main(const int argc, const char *argv[]) {
                             "\nError: expected %d bodies, wrote %zu\n",
                             total_bodies, nwrite);
                 } else {
-                    printf("\nSuccessfully wrote CPU simulation data to %s\n", argv[2]);
+                    printf("\nSuccessfully wrote CPU simulation data to %s\n", out_filename);
                 }
             }
             fclose(fp);

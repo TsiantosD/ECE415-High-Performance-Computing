@@ -82,13 +82,25 @@ double run_cpu_simulation(const int num_systems, const int bodies_per_system, co
 
     StartTimer();
     
+    int total_bodies = num_systems * bodies_per_system;
     for (int iter = 0; iter < nIters; iter++) {
-        //PRINT_PROGRESS_RATE(iter, nIters);
+        PRINT_PROGRESS_RATE(iter + 1, nIters);
         #pragma omp parallel for schedule(OMP_SCHEDULE_TYPE) 
         for (int sys = 0; sys < num_systems; sys++) {
             bodyForce(&systems[sys], dt, bodies_per_system);
             integrate(&systems[sys], dt, bodies_per_system);
         }
+
+        // Copy back to data for saving frame (optional)
+        for (int s = 0; s < num_systems; s++) {
+            for (int i = 0; i < bodies_per_system; i++) {
+                int idx = s * bodies_per_system + i;
+                data[idx].x  = systems[s].x[i];
+                data[idx].y  = systems[s].y[i];
+                data[idx].z  = systems[s].z[i];
+            }
+        }
+        save_frame(data, total_bodies, iter + 1);
     }
 
     double total_time = GetTimer() / 1000.0f;

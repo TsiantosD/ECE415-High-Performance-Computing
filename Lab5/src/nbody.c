@@ -1,5 +1,7 @@
 #include <math.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "helpers.h"
 #include "timer.h"
 
@@ -57,15 +59,18 @@ double run_cpu_simulation(const int num_systems, const int bodies_per_system, co
     
     Body *system_ptr;
     int iter, sys;
-    for (iter = 1; iter <= nIters; iter++) {
+    int total_bodies = num_systems * bodies_per_system;
 
+    for (iter = 1; iter <= nIters; iter++) {
         PRINT_PROGRESS_RATE(iter, nIters);
         for (sys = 0; sys < num_systems; sys++) {
-	        system_ptr = &data[sys * bodies_per_system];
-	        
-	        bodyForce(system_ptr, dt, bodies_per_system);
-	        integrate(system_ptr, dt, bodies_per_system);
+            system_ptr = &data[sys * bodies_per_system];
+            
+            bodyForce(system_ptr, dt, bodies_per_system);
+            integrate(system_ptr, dt, bodies_per_system);
         }
+
+        save_frame(data, total_bodies, iter);
     }
 
     return GetTimer() / 1000.0;
