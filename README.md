@@ -1,5 +1,11 @@
 # ECE415 — High-Performance Computing
 
+![C](https://img.shields.io/badge/C-systems-blue)
+![OpenMP](https://img.shields.io/badge/OpenMP-parallel-orange)
+![CUDA](https://img.shields.io/badge/CUDA-GPU-green)
+![HPC](https://img.shields.io/badge/HPC-performance-purple)
+![Coursework](https://img.shields.io/badge/UTH-ECE415-teal)
+
 High-performance computing coursework for ECE415 at the University of Thessaly. The labs start with CPU-side profiling and loop-level optimization, then move through OpenMP, CUDA kernels, CUDA streams, memory-hierarchy tuning, and multi-GPU execution.
 
 Core tools: C, OpenMP, CUDA, Python, NVIDIA profiling tools.
