@@ -6,7 +6,7 @@
 ![HPC](https://img.shields.io/badge/HPC-performance-purple)
 ![Coursework](https://img.shields.io/badge/UTH-ECE415-teal)
 
-High-performance computing coursework for **ECE415** at the **University of Thessaly**. The labs start with CPU-side profiling and loop-level optimization, then move through OpenMP, CUDA kernels, CUDA streams, memory-hierarchy tuning, and multi-GPU execution.
+Coursework repository for **ECE415 — High-Performance Computing** at the **University of Thessaly**. The labs start with CPU-side profiling and loop-level optimization, then move through OpenMP, CUDA kernels, CUDA streams, memory-hierarchy tuning, and multi-GPU execution.
 
 ## Quick overview
 
@@ -42,13 +42,13 @@ Key pieces of the Lab 5 implementation include:
   <img src="docs/images/ece415-lab-map.svg" alt="ECE415 lab map from CPU optimization and OpenMP to CUDA convolution, CLAHE, and N-body simulation" width="100%">
 </p>
 
-| Directory | Topic | Implementation summary |
+| Path | Topic | Implementation summary |
 | --- | --- | --- |
-| `Lab1/` | Sobel CPU optimization | Serial C optimization passes for Sobel edge detection, including loop interchange, unrolling, fusion, inlining, common-subexpression elimination, strength reduction, and OpenMP comparison. |
-| `Lab2/` | OpenMP K-Means | Parallel K-Means clustering with OpenMP, SIMD/critical/atomic experiments, timing scripts, and report plots. |
-| `Lab3/` | CUDA convolution | CUDA 2D convolution kernels covering block sizing, precision behavior, image padding, divergence effects, and runtime comparisons. |
-| `Lab4/` | CUDA CLAHE | Contrast Limited Adaptive Histogram Equalization with multiple kernels, privatized histograms, scans, coalesced memory access, streams, events, and profiling plots. |
-| `Lab5/` | N-body simulation | CPU, OpenMP, CUDA, stream, shared-memory, coarsening, multi-GPU, and divergence-reduction versions of a galaxy N-body simulator. |
+| [`Lab1/`](Lab1/) | Sobel CPU optimization | Serial C optimization passes for Sobel edge detection, including loop interchange, unrolling, fusion, inlining, common-subexpression elimination, strength reduction, and OpenMP comparison. |
+| [`Lab2/`](Lab2/) | OpenMP K-Means | Parallel K-Means clustering with OpenMP, SIMD/critical/atomic experiments, timing scripts, and report plots. |
+| [`Lab3/`](Lab3/) | CUDA convolution | CUDA 2D convolution kernels covering block sizing, precision behavior, image padding, divergence effects, and runtime comparisons. |
+| [`Lab4/`](Lab4/) | CUDA CLAHE | Contrast Limited Adaptive Histogram Equalization with multiple kernels, privatized histograms, scans, coalesced memory access, streams, events, and profiling plots. |
+| [`Lab5/`](Lab5/) | N-body simulation | CPU, OpenMP, CUDA, stream, shared-memory, coarsening, multi-GPU, and divergence-reduction versions of a galaxy N-body simulator. |
 
 ## Requirements
 
