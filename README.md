@@ -38,6 +38,8 @@ Key pieces of the Lab 5 implementation include:
 
 ## Course contents
 
+Lab handouts are collected under [`docs/handouts/`](docs/handouts/). Recovered reports for Labs 1–5 are collected under [`docs/reports/`](docs/reports/)
+
 <p align="center">
   <img src="docs/images/ece415-lab-map.svg" alt="ECE415 lab map from CPU optimization and OpenMP to CUDA convolution, CLAHE, and N-body simulation" width="100%">
 </p>
